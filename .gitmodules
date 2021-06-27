@@ -1,0 +1,6 @@
+[submodule "tock"]
+	path = tock
+	url = https://github.com/tock/tock.git
+[submodule "libtock-c"]
+	path = libtock-c
+	url = https://github.com/tock/libtock-c.git
