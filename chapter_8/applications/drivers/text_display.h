@@ -1,4 +1,4 @@
-// Digit Letter Display API
+// Text Display API
 
 #pragma once
 
@@ -10,13 +10,17 @@
 extern "C" {
 #endif
 
-typedef struct {
-    bool done;
-    statuscode_t status;
-} text_display_status_t;
+typedef void (text_display_done_t)(statuscode_t, void *user_data);
 
+// Presence
 bool text_display_is_present (void);
-int text_display_show_text (const char* text, int display_ms);
+
+// Asynchronous API
+void text_display_set_done_callback (text_display_done_t callback, void *callback_args);
+statuscode_t text_display_show_text (const char* text, unsigned int display_ms);
+
+// Synchronous API
+statuscode_t text_display_show_text_sync (const char* text, unsigned int display_ms);
 
 #ifdef __cplusplus
 }
