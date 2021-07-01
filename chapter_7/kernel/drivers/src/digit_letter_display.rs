@@ -12,7 +12,7 @@ const DIGITS: [u32; 10] = [
     // 2
     0b11110_00001_01110_10000_11111,
     // 3
-    0b11110_00001_11110_00010_11111,
+    0b11110_00001_11110_00001_11110,
     // 4
     0b10000_10000_10100_11111_00100,
     // 5
@@ -47,7 +47,7 @@ impl<'a, L: Led> DigitLetterDisplay<'a, L> {
 
     fn print(&self, glyph: u32) {
         for index in 0..25 {
-            match glyph >> (25 - index) {
+            match (glyph >> (24 - index)) & 0x01 {
                 0 => self.leds[index].off(),
                 _ => self.leds[index].on(),
             }
