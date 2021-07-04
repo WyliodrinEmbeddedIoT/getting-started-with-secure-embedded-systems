@@ -17,11 +17,13 @@ int main(void) {
     // display the text in an asynchronous way
     bool done = false;
     text_display_set_done_callback (job_done, &done);
-    text_display_show_text ("Hello World from the Microbit", 300);
-    while (yield_no_wait() == 0 && done == false) {
-      printf (".");
-      fflush (stdout);
-      delay_ms (1000);
+    if (text_display_show_text ("Hello World from the Microbit", 300) == TOCK_STATUSCODE_SUCCESS)
+    {
+      while (yield_no_wait() == 0 && done == false) {
+        printf (".");
+        fflush (stdout);
+        delay_ms (1000);
+      }
     }
   } else {
     printf ("Error: the text_display driver is not present\n");

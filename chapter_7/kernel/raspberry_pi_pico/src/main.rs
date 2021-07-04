@@ -21,6 +21,7 @@ use kernel::hil::led::LedHigh;
 use kernel::{capabilities, create_capability, static_init, Kernel, Platform};
 use rp2040;
 
+use capsules::led_matrix::LedMatrixLed;
 use rp2040::adc::{Adc, Channel};
 use rp2040::chip::{Rp2040, Rp2040DefaultPeripherals};
 use rp2040::clocks::{
@@ -31,7 +32,6 @@ use rp2040::clocks::{
 use rp2040::gpio::{GpioFunction, RPGpio, RPGpioPin};
 use rp2040::resets::Peripheral;
 use rp2040::timer::RPTimer;
-use capsules::led_matrix::LedMatrixLed;
 
 mod io;
 
@@ -64,7 +64,7 @@ pub struct RaspberryPiPico {
     console: &'static capsules::console::Console<'static>,
     alarm: &'static capsules::alarm::AlarmDriver<
         'static,
-        VirtualMuxAlarm<'static, rp2040::timer::RPTimer<'static>>,
+        VirtualMuxAlarm<'static, RPTimer<'static>>,
     >,
     gpio: &'static capsules::gpio::GPIO<'static, RPGpioPin<'static>>,
     led: &'static capsules::led::LedDriver<'static, LedHigh<'static, RPGpioPin<'static>>>,
@@ -72,11 +72,7 @@ pub struct RaspberryPiPico {
     temperature: &'static capsules::temperature::TemperatureSensor<'static>,
     digit_letter_display: &'static drivers::digit_letter_display::DigitLetterDisplay<
         'static,
-        LedMatrixLed<
-            'static,
-            RPGpioPin<'static>,
-            VirtualMuxAlarm<'static, RPTimer<'static>>,
-        >,
+        LedMatrixLed<'static, RPGpioPin<'static>, VirtualMuxAlarm<'static, RPTimer<'static>>>,
     >,
 }
 
@@ -380,7 +376,6 @@ pub unsafe fn main() {
         ),
     );
 
-
     // LED Matrix
 
     let led_matrix_driver = components::led_matrix_component_helper!(
@@ -463,7 +458,6 @@ pub unsafe fn main() {
         adc: adc_syscall,
         temperature: temp,
         digit_letter_display: digit_letter_display,
-        // monitor arm semihosting enable
     };
     debug!("Initialization complete. Enter main loop");
 

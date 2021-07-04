@@ -66,7 +66,7 @@ pub struct RaspberryPiPico {
     console: &'static capsules::console::Console<'static>,
     alarm: &'static capsules::alarm::AlarmDriver<
         'static,
-        VirtualMuxAlarm<'static, rp2040::timer::RPTimer<'static>>,
+        VirtualMuxAlarm<'static, RPTimer<'static>>,
     >,
     gpio: &'static capsules::gpio::GPIO<'static, RPGpioPin<'static>>,
     led: &'static capsules::led::LedDriver<'static, LedHigh<'static, RPGpioPin<'static>>>,
@@ -75,7 +75,7 @@ pub struct RaspberryPiPico {
     text_display: &'static drivers::text_display::TextDisplay<
         'static,
         LedMatrixLed<'static, RPGpioPin<'static>, VirtualMuxAlarm<'static, RPTimer<'static>>>,
-        VirtualMuxAlarm<'static, rp2040::timer::RPTimer<'static>>,
+        VirtualMuxAlarm<'static, RPTimer<'static>>,
     >,
 }
 
@@ -473,7 +473,6 @@ pub unsafe fn main() {
         adc: adc_syscall,
         temperature: temp,
         text_display: text_display,
-        // monitor arm semihosting enable
     };
     debug!("Initialization complete. Enter main loop");
 
