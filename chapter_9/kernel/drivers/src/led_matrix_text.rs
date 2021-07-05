@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 use core::cell::Cell;
+use core::cmp;
 use kernel::common::cells::{OptionalCell, TakeCell};
 use kernel::common::dynamic_deferred_call::{
     DeferredCallHandle, DynamicDeferredCall, DynamicDeferredCallClient,
@@ -9,6 +10,8 @@ use kernel::hil::text_screen::{TextScreen, TextScreenClient};
 use kernel::hil::time::{Alarm, AlarmClient};
 use kernel::ErrorCode;
 use kernel::{CommandReturn, Driver, ProcessId};
+
+use kernel::debug;
 
 pub const DRIVER_NUM: usize = 0xa0003;
 
@@ -57,7 +60,6 @@ pub struct LedMatrixText<'a, L: Led, A: Alarm<'a>> {
     position: Cell<usize>,
     len: Cell<usize>,
     speed: Cell<u32>,
-    x: Cell<usize>,
     status: Cell<Status>,
     is_enabled: Cell<bool>,
     deferred_caller: &'a DynamicDeferredCall,
@@ -84,7 +86,6 @@ impl<'a, L: Led, A: Alarm<'a>> LedMatrixText<'a, L, A> {
             client_len: Cell::new(0),
             position: Cell::new(0),
             speed: Cell::new(speed),
-            x: Cell::new(0),
             len: Cell::new(0),
             status: Cell::new(Status::Idle),
             is_enabled: Cell::new(false),
@@ -107,10 +108,12 @@ impl<'a, L: Led, A: Alarm<'a>> LedMatrixText<'a, L, A> {
         if self.position.get() >= self.len.get() {
             self.position.set(0);
         }
+        debug!("display_next {} of {}", self.position.get(), self.len.get());
         if self.position.get() < self.len.get() {
             if !self.buffer.map_or(false, |buffer| {
                 if self.position.get() < buffer.len() {
                     let _ = self.display(buffer[self.position.get()] as char);
+                    self.position.set(self.position.get() + 1);
                     true
                 } else {
                     false
@@ -118,6 +121,8 @@ impl<'a, L: Led, A: Alarm<'a>> LedMatrixText<'a, L, A> {
             }) {
                 self.clear();
             }
+        }
+        if self.len.get() > 0 {
             self.alarm
                 .set_alarm(self.alarm.now(), A::ticks_from_ms(self.speed.get()));
         }
@@ -141,6 +146,7 @@ impl<'a, L: Led, A: Alarm<'a>> LedMatrixText<'a, L, A> {
     fn display(&self, character: char) -> Result<(), ErrorCode> {
         if self.is_enabled.get() {
             let displayed_character = character.to_ascii_uppercase();
+            debug!("display {}", displayed_character);
             match displayed_character {
                 '0'..='9' => {
                     self.print(DIGITS[displayed_character as usize - '0' as usize]);
@@ -211,46 +217,31 @@ impl<'a, L: Led, A: Alarm<'a>> TextScreen<'a> for LedMatrixText<'a, L, A> {
     ) -> Result<(), (ErrorCode, &'static mut [u8])> {
         if self.status.get() == Status::Idle {
             if len <= buffer.len() {
-                if self.x.get() + len < self.get_buffer_len() {
-                    self.buffer.map(|buffer| {
-                        for position in 0..len {
-                            buffer[position + self.x.get()] = buffer[position];
-                        }
-                        self.x.set(self.x.get() + len);
-                    });
-                    self.client_buffer.replace(buffer);
-                    self.client_len.set(len);
-                    self.status.set(Status::ExecutesPrint);
-                    self.schedule_deferred_callback();
-                    Ok(())
-                } else {
-                    Err((ErrorCode::SIZE, buffer))
+                let previous_len = self.len.get();
+                self.buffer.map(|buf| {
+                    for position in 0..len {
+                        buf[position] = buffer[position];
+                    }
+                    self.len.set(cmp::max(len, self.len.get()));
+                });
+                self.client_buffer.replace(buffer);
+                self.client_len.set(len);
+                self.status.set(Status::ExecutesPrint);
+                self.schedule_deferred_callback();
+                if previous_len == 0 {
+                    self.display_next();
                 }
+                Ok(())
             } else {
-                Err((ErrorCode::INVAL, buffer))
+                Err((ErrorCode::SIZE, buffer))
             }
         } else {
             Err((ErrorCode::BUSY, buffer))
         }
     }
 
-    fn set_cursor(&self, x_position: usize, y_position: usize) -> Result<(), ErrorCode> {
-        if self.status.get() == Status::Idle {
-            if y_position != 0 {
-                Err(ErrorCode::INVAL)
-            } else {
-                if x_position < self.get_buffer_len() {
-                    self.x.set(x_position);
-                    self.status.set(Status::ExecutesCommand);
-                    self.schedule_deferred_callback();
-                    Ok(())
-                } else {
-                    Err(ErrorCode::INVAL)
-                }
-            }
-        } else {
-            Err(ErrorCode::BUSY)
-        }
+    fn set_cursor(&self, _x_position: usize, _y_position: usize) -> Result<(), ErrorCode> {
+        Err(ErrorCode::NOSUPPORT)
     }
 
     fn hide_cursor(&self) -> Result<(), ErrorCode> {
