@@ -18,7 +18,7 @@ int main(void) {
       digit_letter_display_show_character (letter);
       delay_ms (500);
     }
-  } else {
+    } else {
     printf ("Error: the digit_letter_display driver is not present\n");
   }
   return 0;
