@@ -4,7 +4,8 @@ use core::mem;
 use kernel::common::cells::OptionalCell;
 use kernel::hil::led::Led;
 use kernel::hil::time::{Alarm, AlarmClient};
-use kernel::{CommandReturn, Driver, ErrorCode, Grant, ProcessId, Read, ReadOnlyAppSlice, Upcall};
+use kernel::procs::Error;
+use kernel::{CommandReturn, Driver, ErrorCode, Grant, ProcessId, Read, ReadOnlyAppSlice};
 
 pub const DRIVER_NUM: usize = 0xa0002;
 
@@ -31,7 +32,7 @@ const DIGITS: [u32; 10] = [
     0b11111_10001_11111_00001_11111,
 ];
 
-const LETTERS: [u32; 1] = [
+const LETTERS: [u32; 26] = [
     // A
     0b01110_10001_11111_10001_10001,
     // B
@@ -88,7 +89,6 @@ const LETTERS: [u32; 1] = [
 
 #[derive(Default)]
 pub struct AppData {
-    upcall: Upcall,
     buffer: ReadOnlyAppSlice,
     position: usize,
     len: usize,
@@ -98,13 +98,13 @@ pub struct AppData {
 pub struct TextDisplay<'a, L: Led, A: Alarm<'a>> {
     leds: &'a [&'a L],
     alarm: &'a A,
-    grant: Grant<AppData>,
+    grant: Grant<AppData, 1>,
     in_progress: Cell<bool>,
     process_id: OptionalCell<ProcessId>,
 }
 
 impl<'a, L: Led, A: Alarm<'a>> TextDisplay<'a, L, A> {
-    pub fn new(leds: &'a [&'a L], alarm: &'a A, grant: Grant<AppData>) -> Self {
+    pub fn new(leds: &'a [&'a L], alarm: &'a A, grant: Grant<AppData, 1>) -> Self {
         if leds.len() != 25 {
             panic!("Expecting 25 LEDs, {} supplied", leds.len());
         }
@@ -125,7 +125,7 @@ impl<'a, L: Led, A: Alarm<'a>> TextDisplay<'a, L, A> {
                     // panic!("Display in progress with no process id");
                 },
                 |process_id| {
-                    let res = self.grant.enter(*process_id, |app| {
+                    let res = self.grant.enter(*process_id, |app, upcalls| {
                         if app.position < app.len {
                             let res = app.buffer.map_or(false, |buffer| {
                                 let _ = self.display(buffer[app.position] as char);
@@ -139,11 +139,11 @@ impl<'a, L: Led, A: Alarm<'a>> TextDisplay<'a, L, A> {
                                 app.position = app.position + 1;
                             } else {
                                 self.in_progress.set(false);
-                                app.upcall.schedule(ErrorCode::NOMEM.into(), 0, 0);
+                                upcalls.schedule_upcall(0, ErrorCode::NOMEM.into(), 0, 0);
                             }
                         } else {
                             self.in_progress.set(false);
-                            app.upcall.schedule(0, 0, 0);
+                            upcalls.schedule_upcall(0, 0, 0, 0);
                         }
                     });
                     match res {
@@ -198,7 +198,7 @@ impl<'a, L: Led, A: Alarm<'a>> Driver for TextDisplay<'a, L, A> {
     ) -> Result<ReadOnlyAppSlice, (ReadOnlyAppSlice, ErrorCode)> {
         match allow_number {
             0 => {
-                let res = self.grant.enter(process_id, |app| {
+                let res = self.grant.enter(process_id, |app, _| {
                     mem::swap(&mut app.buffer, &mut buffer);
                     app.len = 0;
                     app.position = 0;
@@ -213,24 +213,8 @@ impl<'a, L: Led, A: Alarm<'a>> Driver for TextDisplay<'a, L, A> {
         }
     }
 
-    fn subscribe(
-        &self,
-        subscribe_number: usize,
-        mut upcall: Upcall,
-        process_id: ProcessId,
-    ) -> Result<Upcall, (Upcall, ErrorCode)> {
-        match subscribe_number {
-            0 => {
-                let res = self.grant.enter(process_id, |app| {
-                    mem::swap(&mut app.upcall, &mut upcall);
-                });
-                match res {
-                    Ok(()) => Ok(upcall),
-                    Err(err) => Err((upcall, err.into())),
-                }
-            }
-            _ => Err((upcall, ErrorCode::NOSUPPORT)),
-        }
+    fn allocate_grant(&self, process_id: ProcessId) -> Result<(), Error> {
+        self.grant.enter(process_id, |_, _| {})
     }
 
     fn command(
@@ -244,7 +228,7 @@ impl<'a, L: Led, A: Alarm<'a>> Driver for TextDisplay<'a, L, A> {
             0 => CommandReturn::success(),
             1 => {
                 if !self.in_progress.get() {
-                    let res = self.grant.enter(process_id, |app| {
+                    let res = self.grant.enter(process_id, |app, _| {
                         if app.buffer.len() > 0 {
                             if app.buffer.len() >= r2 {
                                 app.position = 0;

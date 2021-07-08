@@ -10,6 +10,7 @@ use kernel::hil::text_screen::{TextScreen, TextScreenClient};
 use kernel::hil::time::{Alarm, AlarmClient};
 use kernel::ErrorCode;
 use kernel::{CommandReturn, Driver, ProcessId};
+use kernel::procs::Error;
 
 use kernel::debug;
 
@@ -38,7 +39,7 @@ const DIGITS: [u32; 10] = [
     0b11111_10001_11111_00001_11111,
 ];
 
-const LETTERS: [u32; 1] = [
+const LETTERS: [u32; 26] = [
     // A
     0b01110_10001_11111_10001_10001,
     // B
@@ -346,6 +347,10 @@ impl<'a, L: Led, A: Alarm<'a>> TextScreen<'a> for LedMatrixText<'a, L, A> {
 }
 
 impl<'a, L: Led, A: Alarm<'a>> Driver for LedMatrixText<'a, L, A> {
+    fn allocate_grant(&self, _: ProcessId) -> Result<(), Error> {
+        Ok(())
+    }
+
     fn command(
         &self,
         command_number: usize,

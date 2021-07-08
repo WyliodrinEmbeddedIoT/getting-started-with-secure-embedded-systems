@@ -19,9 +19,9 @@ use kernel::component::Component;
 use kernel::debug;
 use kernel::hil::led::LedHigh;
 use kernel::{capabilities, create_capability, static_init, Kernel, Platform};
-use rp2040;
 
 use capsules::led_matrix::LedMatrixLed;
+use rp2040;
 use rp2040::adc::{Adc, Channel};
 use rp2040::chip::{Rp2040, Rp2040DefaultPeripherals};
 use rp2040::clocks::{
@@ -31,6 +31,7 @@ use rp2040::clocks::{
 };
 use rp2040::gpio::{GpioFunction, RPGpio, RPGpioPin};
 use rp2040::resets::Peripheral;
+use rp2040::sysinfo;
 use rp2040::timer::RPTimer;
 
 mod io;
@@ -53,6 +54,7 @@ const FAULT_RESPONSE: kernel::procs::PanicFaultPolicy = kernel::procs::PanicFaul
 
 // Number of concurrent processes this platform supports.
 const NUM_PROCS: usize = 4;
+const NUM_UPCALLS_IPC: usize = NUM_PROCS + 1;
 
 static mut PROCESSES: [Option<&'static dyn kernel::procs::Process>; NUM_PROCS] = [None; NUM_PROCS];
 
@@ -60,12 +62,10 @@ static mut CHIP: Option<&'static Rp2040<Rp2040DefaultPeripherals>> = None;
 
 /// Supported drivers by the platform
 pub struct RaspberryPiPico {
-    ipc: kernel::ipc::IPC<NUM_PROCS>,
+    ipc: kernel::ipc::IPC<NUM_PROCS, NUM_UPCALLS_IPC>,
     console: &'static capsules::console::Console<'static>,
-    alarm: &'static capsules::alarm::AlarmDriver<
-        'static,
-        VirtualMuxAlarm<'static, RPTimer<'static>>,
-    >,
+    alarm:
+        &'static capsules::alarm::AlarmDriver<'static, VirtualMuxAlarm<'static, RPTimer<'static>>>,
     gpio: &'static capsules::gpio::GPIO<'static, RPGpioPin<'static>>,
     led: &'static capsules::led::LedDriver<'static, LedHigh<'static, RPGpioPin<'static>>>,
     adc: &'static capsules::adc::AdcVirtualized<'static>,
@@ -267,8 +267,12 @@ pub unsafe fn main() {
     let mux_alarm = components::alarm::AlarmMuxComponent::new(&peripherals.timer)
         .finalize(components::alarm_mux_component_helper!(RPTimer));
 
-    let alarm = components::alarm::AlarmDriverComponent::new(board_kernel, mux_alarm)
-        .finalize(components::alarm_component_helper!(RPTimer));
+    let alarm = components::alarm::AlarmDriverComponent::new(
+        board_kernel,
+        capsules::alarm::DRIVER_NUM,
+        mux_alarm,
+    )
+    .finalize(components::alarm_component_helper!(RPTimer));
 
     // UART
     // Create a shared UART channel for kernel debug.
@@ -280,12 +284,18 @@ pub unsafe fn main() {
     .finalize(());
 
     // Setup the console.
-    let console = components::console::ConsoleComponent::new(board_kernel, uart_mux).finalize(());
+    let console = components::console::ConsoleComponent::new(
+        board_kernel,
+        capsules::console::DRIVER_NUM,
+        uart_mux,
+    )
+    .finalize(());
     // Create the debugger object that handles calls to `debug!()`.
     components::debug_writer::DebugWriterComponent::new(uart_mux).finalize(());
 
     let gpio = GpioComponent::new(
         board_kernel,
+        capsules::gpio::DRIVER_NUM,
         components::gpio_component_helper!(
             RPGpioPin,
             // Used for serial communication. Comment them in if you don't use serial.
@@ -347,7 +357,8 @@ pub unsafe fn main() {
         ));
 
     let grant_cap = create_capability!(capabilities::MemoryAllocationCapability);
-    let grant_temperature = board_kernel.create_grant(&grant_cap);
+    let grant_temperature =
+        board_kernel.create_grant(capsules::temperature::DRIVER_NUM, &grant_cap);
 
     let temp = static_init!(
         capsules::temperature::TemperatureSensor<'static>,
@@ -367,14 +378,14 @@ pub unsafe fn main() {
     let adc_channel_3 = components::adc::AdcComponent::new(&adc_mux, Channel::Channel3)
         .finalize(components::adc_component_helper!(Adc));
 
-    let adc_syscall = components::adc::AdcVirtualComponent::new(board_kernel).finalize(
-        components::adc_syscall_component_helper!(
-            adc_channel_0,
-            adc_channel_1,
-            adc_channel_2,
-            adc_channel_3,
-        ),
-    );
+    let adc_syscall =
+        components::adc::AdcVirtualComponent::new(board_kernel, capsules::adc::DRIVER_NUM)
+            .finalize(components::adc_syscall_component_helper!(
+                adc_channel_0,
+                adc_channel_1,
+                adc_channel_2,
+                adc_channel_3,
+            ));
 
     // LED Matrix
 
@@ -450,7 +461,11 @@ pub unsafe fn main() {
     let _ = process_console.start();
 
     let raspberry_pi_pico = RaspberryPiPico {
-        ipc: kernel::ipc::IPC::new(board_kernel, &memory_allocation_capability),
+        ipc: kernel::ipc::IPC::new(
+            board_kernel,
+            kernel::ipc::DRIVER_NUM,
+            &memory_allocation_capability,
+        ),
         alarm: alarm,
         gpio: gpio,
         led: led,
@@ -459,6 +474,17 @@ pub unsafe fn main() {
         temperature: temp,
         digit_letter_display: digit_letter_display,
     };
+
+    let platform_type = match peripherals.sysinfo.get_platform() {
+        sysinfo::Platform::Asic => "ASIC",
+        sysinfo::Platform::Fpga => "FPGA",
+    };
+
+    debug!(
+        "RP2040 Revision {} {}",
+        peripherals.sysinfo.get_revision(),
+        platform_type
+    );
     debug!("Initialization complete. Enter main loop");
 
     /// These symbols are defined in the linker script.
