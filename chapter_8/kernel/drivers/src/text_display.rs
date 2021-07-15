@@ -5,7 +5,10 @@ use kernel::common::cells::OptionalCell;
 use kernel::hil::led::Led;
 use kernel::hil::time::{Alarm, AlarmClient};
 use kernel::procs::Error;
-use kernel::{CommandReturn, Driver, ErrorCode, Grant, ProcessId, Read, ReadOnlyAppSlice};
+use kernel::{
+    CommandReturn, Driver, ErrorCode, Grant, ProcessId, ReadOnlyProcessBuffer,
+    ReadableProcessBuffer,
+};
 
 pub const DRIVER_NUM: usize = 0xa0002;
 
@@ -89,7 +92,7 @@ const LETTERS: [u32; 26] = [
 
 #[derive(Default)]
 pub struct AppData {
-    buffer: ReadOnlyAppSlice,
+    buffer: ReadOnlyProcessBuffer,
     position: usize,
     len: usize,
     delay_ms: usize,
@@ -127,23 +130,26 @@ impl<'a, L: Led, A: Alarm<'a>> TextDisplay<'a, L, A> {
                 |process_id| {
                     let res = self.grant.enter(*process_id, |app, upcalls| {
                         if app.position < app.len {
-                            let res = app.buffer.map_or(false, |buffer| {
-                                let _ = self.display(buffer[app.position] as char);
-                                self.alarm.set_alarm(
-                                    self.alarm.now(),
-                                    A::ticks_from_ms(app.delay_ms as u32),
-                                );
-                                true
-                            });
+                            let res = app
+                                .buffer
+                                .enter(|buffer| {
+                                    let _ = self.display(buffer[app.position].get() as char);
+                                    self.alarm.set_alarm(
+                                        self.alarm.now(),
+                                        A::ticks_from_ms(app.delay_ms as u32),
+                                    );
+                                    true
+                                })
+                                .unwrap_or(false);
                             if res {
                                 app.position = app.position + 1;
                             } else {
                                 self.in_progress.set(false);
-                                upcalls.schedule_upcall(0, ErrorCode::NOMEM.into(), 0, 0);
+                                let _ = upcalls.schedule_upcall(0, ErrorCode::NOMEM.into(), 0, 0);
                             }
                         } else {
                             self.in_progress.set(false);
-                            upcalls.schedule_upcall(0, 0, 0, 0);
+                            let _ = upcalls.schedule_upcall(0, 0, 0, 0);
                         }
                     });
                     match res {
@@ -194,8 +200,8 @@ impl<'a, L: Led, A: Alarm<'a>> Driver for TextDisplay<'a, L, A> {
         &self,
         process_id: ProcessId,
         allow_number: usize,
-        mut buffer: ReadOnlyAppSlice,
-    ) -> Result<ReadOnlyAppSlice, (ReadOnlyAppSlice, ErrorCode)> {
+        mut buffer: ReadOnlyProcessBuffer,
+    ) -> Result<ReadOnlyProcessBuffer, (ReadOnlyProcessBuffer, ErrorCode)> {
         match allow_number {
             0 => {
                 let res = self.grant.enter(process_id, |app, _| {
