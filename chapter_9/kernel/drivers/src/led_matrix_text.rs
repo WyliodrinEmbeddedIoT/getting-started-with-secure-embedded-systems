@@ -1,16 +1,15 @@
-#![forbid(unsafe_code)]
 use core::cell::Cell;
 use core::cmp;
-use kernel::common::cells::{OptionalCell, TakeCell};
-use kernel::common::dynamic_deferred_call::{
+use kernel::dynamic_deferred_call::{
     DeferredCallHandle, DynamicDeferredCall, DynamicDeferredCallClient,
 };
 use kernel::hil::led::Led;
 use kernel::hil::text_screen::{TextScreen, TextScreenClient};
-use kernel::hil::time::{Alarm, AlarmClient};
+use kernel::hil::time::{Alarm, AlarmClient, ConvertTicks};
+use kernel::process::{Error, ProcessId};
+use kernel::syscall::{CommandReturn, SyscallDriver};
+use kernel::utilities::cells::{OptionalCell, TakeCell};
 use kernel::ErrorCode;
-use kernel::{CommandReturn, Driver, ProcessId};
-use kernel::procs::Error;
 
 use kernel::debug;
 
@@ -174,7 +173,7 @@ impl<'a, L: Led, A: Alarm<'a>> LedMatrixText<'a, L, A> {
         }
         if self.len.get() > 0 {
             self.alarm
-                .set_alarm(self.alarm.now(), A::ticks_from_ms(self.speed.get()));
+                .set_alarm(self.alarm.now(), self.alarm.ticks_from_ms(self.speed.get()));
         }
     }
 
@@ -346,7 +345,7 @@ impl<'a, L: Led, A: Alarm<'a>> TextScreen<'a> for LedMatrixText<'a, L, A> {
     }
 }
 
-impl<'a, L: Led, A: Alarm<'a>> Driver for LedMatrixText<'a, L, A> {
+impl<'a, L: Led, A: Alarm<'a>> SyscallDriver for LedMatrixText<'a, L, A> {
     fn allocate_grant(&self, _: ProcessId) -> Result<(), Error> {
         Ok(())
     }
