@@ -1,4 +1,3 @@
-#![forbid(unsafe_code)]
 use kernel::hil::led::Led;
 use kernel::syscall::{CommandReturn, SyscallDriver};
 use kernel::ErrorCode;
