@@ -4,7 +4,7 @@
 TOCK_USERLAND_BASE_DIR = ../../../libtock-c
 
 # External libraries used
-# EXTERN_LIBS += ../drivers
+EXTERN_LIBS += ../drivers
 
 # Which files to compile.
 C_SRCS := $(wildcard *.c)

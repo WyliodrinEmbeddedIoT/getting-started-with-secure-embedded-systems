@@ -99,6 +99,10 @@ static void ipc_callback(int pid, int len, int buf, __attribute__((unused)) void
     printf("Recevided display request from process %d\n", pid);
     strncpy (BUFFER, buffer, MIN(BUFFER_LEN, len));
   }
+  // notify the app that the service has copied tha data
+  // from the shared buffer
+  // use while to make sure we notify the application
+  while (ipc_notify_client(pid) != RETURNCODE_SUCCESS) {};
 }
 
 static void display_code (uint32_t code) {
@@ -114,6 +118,13 @@ static void display_code (uint32_t code) {
   }
 }
 
+static void clear(void) {
+  int led_index = 0;
+  for (led_index=0; led_index<NUM_LEDS; led_index++) {
+    led_off(led_index);
+  }
+}
+
 static void display(char digit_or_letter) {
   digit_or_letter = toupper(digit_or_letter);
   if (digit_or_letter >= '0' && digit_or_letter <= '9') {
@@ -122,12 +133,8 @@ static void display(char digit_or_letter) {
   else if (digit_or_letter >= 'A' && digit_or_letter <= 'Z') {
     display_code(LETTERS[digit_or_letter - 'A']);
   }
-}
-
-static void clear(void) {
-  int led_index = 0;
-  for (led_index=0; led_index<NUM_LEDS; led_index++) {
-    led_off(led_index);
+  else {
+    clear();
   }
 }
 
@@ -135,6 +142,8 @@ int main(void) {
   int leds;
   int position = 0;
   int len = 0;
+
+  bool should_clear = true;
 
   strcpy (BUFFER, "");
 
@@ -148,11 +157,16 @@ int main(void) {
         len = strnlen (BUFFER, BUFFER_LEN);
         if (len == 0) {
           position = 0;
-          clear ();
+          if (should_clear)
+          {
+            should_clear = false;
+            clear ();
+          }
         }
         else if (position < len) {
-          position = (position + 1) % len;
           display (BUFFER[position]);
+          should_clear = true;
+          position = (position + 1) % len;
         }
         delay_ms(300);
       }

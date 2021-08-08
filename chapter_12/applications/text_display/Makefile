@@ -1,6 +1,6 @@
 # Makefile for user application
 
-PACKAGE_NAME = text_display.driver
+PACKAGE_NAME = text_display.service
 
 # Specify this directory relative to the current application.
 TOCK_USERLAND_BASE_DIR = ../../../libtock-c
