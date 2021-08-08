@@ -523,7 +523,7 @@ pub unsafe fn main() {
         scheduler,
         systick: cortexm0p::systick::SysTick::new_with_calibration(125_000_000),
 
-        digit_letter_display: digit_letter_display,
+        digit_letter_display,
     };
 
     let platform_type = match peripherals.sysinfo.get_platform() {
