@@ -1,0 +1,29 @@
+[package]
+name = "raspberry_pi_pico"
+version = "0.1.0"
+authors = ["Tock Project Developers <tock-dev@googlegroups.com>"]
+build = "build.rs"
+edition = "2018"
+
+[dependencies]
+cortexm0p = { path = "../../../tock/arch/cortex-m0p" }
+capsules = { path = "../../../tock/capsules" }
+kernel = { path = "../../../tock/kernel" }
+rp2040 = { path = "../../../tock/chips/rp2040" }
+components = { path = "../../../tock/boards/components" }
+enum_primitive = { path = "../../../tock/libraries/enum_primitive" }
+drivers = { path = "../drivers" }
+
+[profile.dev]
+panic = "abort"
+lto = false
+opt-level = "z"
+debug = true
+
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = "z"
+debug = true
+codegen-units = 1
+
