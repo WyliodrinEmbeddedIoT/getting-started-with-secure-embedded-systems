@@ -1,14 +1,14 @@
 #![forbid(unsafe_code)]
 use core::cell::Cell;
 use core::mem;
-use kernel::common::cells::OptionalCell;
+use kernel::grant::Grant;
 use kernel::hil::led::Led;
-use kernel::hil::time::{Alarm, AlarmClient};
-use kernel::procs::Error;
-use kernel::{
-    CommandReturn, Driver, ErrorCode, Grant, ProcessId, ReadOnlyProcessBuffer,
-    ReadableProcessBuffer,
-};
+use kernel::hil::time::{Alarm, AlarmClient, ConvertTicks};
+use kernel::process::{Error, ProcessId};
+use kernel::processbuffer::{ReadOnlyProcessBuffer, ReadableProcessBuffer};
+use kernel::syscall::{CommandReturn, SyscallDriver};
+use kernel::utilities::cells::OptionalCell;
+use kernel::ErrorCode;
 
 pub const DRIVER_NUM: usize = 0xa0002;
 
@@ -136,7 +136,7 @@ impl<'a, L: Led, A: Alarm<'a>> TextDisplay<'a, L, A> {
                                     let _ = self.display(buffer[app.position].get() as char);
                                     self.alarm.set_alarm(
                                         self.alarm.now(),
-                                        A::ticks_from_ms(app.delay_ms as u32),
+                                        self.alarm.ticks_from_ms(app.delay_ms as u32),
                                     );
                                     true
                                 })
@@ -145,11 +145,11 @@ impl<'a, L: Led, A: Alarm<'a>> TextDisplay<'a, L, A> {
                                 app.position = app.position + 1;
                             } else {
                                 self.in_progress.set(false);
-                                let _ = upcalls.schedule_upcall(0, ErrorCode::NOMEM.into(), 0, 0);
+                                let _ = upcalls.schedule_upcall(0, (ErrorCode::NOMEM.into(), 0, 0));
                             }
                         } else {
                             self.in_progress.set(false);
-                            let _ = upcalls.schedule_upcall(0, 0, 0, 0);
+                            let _ = upcalls.schedule_upcall(0, (0, 0, 0));
                         }
                     });
                     match res {
@@ -195,7 +195,7 @@ impl<'a, L: Led, A: Alarm<'a>> TextDisplay<'a, L, A> {
     }
 }
 
-impl<'a, L: Led, A: Alarm<'a>> Driver for TextDisplay<'a, L, A> {
+impl<'a, L: Led, A: Alarm<'a>> SyscallDriver for TextDisplay<'a, L, A> {
     fn allow_readonly(
         &self,
         process_id: ProcessId,
