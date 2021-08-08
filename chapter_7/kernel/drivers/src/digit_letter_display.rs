@@ -1,7 +1,8 @@
 #![forbid(unsafe_code)]
 use kernel::hil::led::Led;
-use kernel::{CommandReturn, Driver, ErrorCode, ProcessId};
-use kernel::procs::Error;
+use kernel::syscall::{CommandReturn, SyscallDriver};
+use kernel::ErrorCode;
+use kernel::process::{Error, ProcessId};
 
 pub const DRIVER_NUM: usize = 0xa0001;
 
@@ -129,7 +130,8 @@ impl<'a, L: Led> DigitLetterDisplay<'a, L> {
     }
 }
 
-impl<'a, L: Led> Driver for DigitLetterDisplay<'a, L> {
+impl<'a, L: Led> SyscallDriver for DigitLetterDisplay<'a, L> {
+
     fn allocate_grant (&self, _process_id: ProcessId) -> Result<(), Error> {
         Ok(())
     }

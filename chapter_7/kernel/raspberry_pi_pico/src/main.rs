@@ -9,16 +9,18 @@
 #![deny(missing_docs)]
 #![feature(asm, naked_functions)]
 
-use kernel::common::dynamic_deferred_call::{DynamicDeferredCall, DynamicDeferredCallClientState};
-
 use capsules::virtual_alarm::VirtualMuxAlarm;
 use components::gpio::GpioComponent;
 use components::led::LedsComponent;
 use enum_primitive::cast::FromPrimitive;
 use kernel::component::Component;
 use kernel::debug;
+use kernel::dynamic_deferred_call::{DynamicDeferredCall, DynamicDeferredCallClientState};
 use kernel::hil::led::LedHigh;
-use kernel::{capabilities, create_capability, static_init, Kernel, Platform};
+use kernel::platform::{KernelResources, SyscallDriverLookup};
+use kernel::scheduler::round_robin::RoundRobinSched;
+use kernel::syscall::SyscallDriver;
+use kernel::{capabilities, create_capability, static_init, Kernel};
 
 use capsules::led_matrix::LedMatrixLed;
 use rp2040;
@@ -50,13 +52,14 @@ static FLASH_BOOTLOADER: [u8; 256] = flash_bootloader::FLASH_BOOTLOADER;
 
 // State for loading and holding applications.
 // How should the kernel respond when a process faults.
-const FAULT_RESPONSE: kernel::procs::PanicFaultPolicy = kernel::procs::PanicFaultPolicy {};
+const FAULT_RESPONSE: kernel::process::PanicFaultPolicy = kernel::process::PanicFaultPolicy {};
 
 // Number of concurrent processes this platform supports.
 const NUM_PROCS: usize = 4;
 const NUM_UPCALLS_IPC: usize = NUM_PROCS + 1;
 
-static mut PROCESSES: [Option<&'static dyn kernel::procs::Process>; NUM_PROCS] = [None; NUM_PROCS];
+static mut PROCESSES: [Option<&'static dyn kernel::process::Process>; NUM_PROCS] =
+    [None; NUM_PROCS];
 
 static mut CHIP: Option<&'static Rp2040<Rp2040DefaultPeripherals>> = None;
 
@@ -70,16 +73,20 @@ pub struct RaspberryPiPico {
     led: &'static capsules::led::LedDriver<'static, LedHigh<'static, RPGpioPin<'static>>>,
     adc: &'static capsules::adc::AdcVirtualized<'static>,
     temperature: &'static capsules::temperature::TemperatureSensor<'static>,
+
+    scheduler: &'static RoundRobinSched<'static>,
+    systick: cortexm0p::systick::SysTick,
+
     digit_letter_display: &'static drivers::digit_letter_display::DigitLetterDisplay<
         'static,
         LedMatrixLed<'static, RPGpioPin<'static>, VirtualMuxAlarm<'static, RPTimer<'static>>>,
     >,
 }
 
-impl Platform for RaspberryPiPico {
+impl SyscallDriverLookup for RaspberryPiPico {
     fn with_driver<F, R>(&self, driver_num: usize, f: F) -> R
     where
-        F: FnOnce(Option<&dyn kernel::Driver>) -> R,
+        F: FnOnce(Option<&dyn SyscallDriver>) -> R,
     {
         match driver_num {
             capsules::console::DRIVER_NUM => f(Some(self.console)),
@@ -92,6 +99,34 @@ impl Platform for RaspberryPiPico {
             drivers::digit_letter_display::DRIVER_NUM => f(Some(self.digit_letter_display)),
             _ => f(None),
         }
+    }
+}
+
+impl KernelResources<Rp2040<'static, Rp2040DefaultPeripherals<'static>>> for RaspberryPiPico {
+    type SyscallDriverLookup = Self;
+    type SyscallFilter = ();
+    type ProcessFault = ();
+    type Scheduler = RoundRobinSched<'static>;
+    type SchedulerTimer = cortexm0p::systick::SysTick;
+    type WatchDog = ();
+
+    fn syscall_driver_lookup(&self) -> &Self::SyscallDriverLookup {
+        &self
+    }
+    fn syscall_filter(&self) -> &Self::SyscallFilter {
+        &()
+    }
+    fn process_fault(&self) -> &Self::ProcessFault {
+        &()
+    }
+    fn scheduler(&self) -> &Self::Scheduler {
+        self.scheduler
+    }
+    fn scheduler_timer(&self) -> &Self::SchedulerTimer {
+        &self.systick
+    }
+    fn watchdog(&self) -> &Self::WatchDog {
+        &()
     }
 }
 
@@ -190,13 +225,21 @@ fn init_clocks(peripherals: &Rp2040DefaultPeripherals) {
         .configure_peripheral(PeripheralAuxiliaryClockSource::System, 125000000);
 }
 
+/// This is in a separate, inline(never) function so that its stack frame is
+/// removed when this function returns. Otherwise, the stack space used for
+/// these static_inits is wasted.
+#[inline(never)]
+unsafe fn get_peripherals() -> &'static mut Rp2040DefaultPeripherals<'static> {
+    static_init!(Rp2040DefaultPeripherals, Rp2040DefaultPeripherals::new())
+}
+
 /// Main function called after RAM initialized.
 #[no_mangle]
 pub unsafe fn main() {
     // Loads relocations and clears BSS
     rp2040::init();
 
-    let peripherals = static_init!(Rp2040DefaultPeripherals, Rp2040DefaultPeripherals::new());
+    let peripherals = get_peripherals();
 
     // Set the UART used for panic
     io::WRITER.set_uart(&peripherals.uart0);
@@ -301,6 +344,7 @@ pub unsafe fn main() {
             // Used for serial communication. Comment them in if you don't use serial.
             // 0 => &peripherals.pins.get_pin(RPGpio::GPIO0),
             // 1 => &peripherals.pins.get_pin(RPGpio::GPIO1),
+            // pins 2 to 11 are used for LED Matrix pins
             // 2 => &peripherals.pins.get_pin(RPGpio::GPIO2),
             // 3 => &peripherals.pins.get_pin(RPGpio::GPIO3),
             // 4 => &peripherals.pins.get_pin(RPGpio::GPIO4),
@@ -460,18 +504,25 @@ pub unsafe fn main() {
             .finalize(());
     let _ = process_console.start();
 
+    let scheduler = components::sched::round_robin::RoundRobinComponent::new(&PROCESSES)
+        .finalize(components::rr_component_helper!(NUM_PROCS));
+
     let raspberry_pi_pico = RaspberryPiPico {
         ipc: kernel::ipc::IPC::new(
             board_kernel,
             kernel::ipc::DRIVER_NUM,
             &memory_allocation_capability,
         ),
-        alarm: alarm,
-        gpio: gpio,
-        led: led,
-        console: console,
+        alarm,
+        gpio,
+        led,
+        console,
         adc: adc_syscall,
         temperature: temp,
+
+        scheduler,
+        systick: cortexm0p::systick::SysTick::new_with_calibration(125_000_000),
+
         digit_letter_display: digit_letter_display,
     };
 
@@ -499,7 +550,7 @@ pub unsafe fn main() {
         static _eappmem: u8;
     }
 
-    kernel::procs::load_processes(
+    kernel::process::load_processes(
         board_kernel,
         chip,
         core::slice::from_raw_parts(
@@ -519,14 +570,10 @@ pub unsafe fn main() {
         debug!("{:?}", err);
     });
 
-    let scheduler = components::sched::round_robin::RoundRobinComponent::new(&PROCESSES)
-        .finalize(components::rr_component_helper!(NUM_PROCS));
-
     board_kernel.kernel_loop(
         &raspberry_pi_pico,
         chip,
         Some(&raspberry_pi_pico.ipc),
-        scheduler,
         &main_loop_capability,
     );
 }
