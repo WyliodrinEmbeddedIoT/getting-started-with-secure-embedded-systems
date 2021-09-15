@@ -103,17 +103,23 @@ enum Status {
 pub struct LedMatrixText<'a, L: Led, A: Alarm<'a>> {
     leds: &'a [&'a L],
     alarm: &'a A,
+
+    client: OptionalCell<&'a dyn TextScreenClient>,
+
     buffer: TakeCell<'a, [u8]>,
-    client_buffer: TakeCell<'static, [u8]>,
-    client_len: Cell<usize>,
     position: Cell<usize>,
     len: Cell<usize>,
+
+    client_buffer: TakeCell<'static, [u8]>,
+    client_len: Cell<usize>,
+
     speed: Cell<u32>,
+
     status: Cell<Status>,
     is_enabled: Cell<bool>,
+
     deferred_caller: &'a DynamicDeferredCall,
     deferred_call_handle: OptionalCell<DeferredCallHandle>,
-    client: OptionalCell<&'a dyn TextScreenClient>,
 }
 
 impl<'a, L: Led, A: Alarm<'a>> LedMatrixText<'a, L, A> {
@@ -216,6 +222,8 @@ impl<'a, L: Led, A: Alarm<'a>> LedMatrixText<'a, L, A> {
         }
     }
 
+    /* ... */
+
     fn get_buffer_len(&self) -> usize {
         self.buffer.map_or(0, |buffer| buffer.len())
     }
@@ -266,16 +274,16 @@ impl<'a, L: Led, A: Alarm<'a>> TextScreen<'a> for LedMatrixText<'a, L, A> {
     ) -> Result<(), (ErrorCode, &'static mut [u8])> {
         if self.status.get() == Status::Idle {
             if len <= buffer.len() {
+                self.status.set(Status::ExecutesPrint);
                 let previous_len = self.len.get();
                 self.buffer.map(|buf| {
-                    for position in 0..len {
+                    for position in 0..cmp::min(len, buf.len()) {
                         buf[position] = buffer[position];
                     }
                     self.len.set(cmp::max(len, self.len.get()));
                 });
                 self.client_buffer.replace(buffer);
                 self.client_len.set(len);
-                self.status.set(Status::ExecutesPrint);
                 self.schedule_deferred_callback();
                 if previous_len == 0 {
                     self.display_next();
@@ -311,8 +319,8 @@ impl<'a, L: Led, A: Alarm<'a>> TextScreen<'a> for LedMatrixText<'a, L, A> {
 
     fn display_on(&self) -> Result<(), ErrorCode> {
         if self.status.get() == Status::Idle {
-            self.is_enabled.set(true);
             self.status.set(Status::ExecutesCommand);
+            self.is_enabled.set(true);
             self.schedule_deferred_callback();
             Ok(())
         } else {
@@ -322,8 +330,8 @@ impl<'a, L: Led, A: Alarm<'a>> TextScreen<'a> for LedMatrixText<'a, L, A> {
 
     fn display_off(&self) -> Result<(), ErrorCode> {
         if self.status.get() == Status::Idle {
-            self.is_enabled.set(false);
             self.status.set(Status::ExecutesCommand);
+            self.is_enabled.set(false);
             self.schedule_deferred_callback();
             Ok(())
         } else {
@@ -333,10 +341,10 @@ impl<'a, L: Led, A: Alarm<'a>> TextScreen<'a> for LedMatrixText<'a, L, A> {
 
     fn clear(&self) -> Result<(), ErrorCode> {
         if self.status.get() == Status::Idle {
+            self.status.set(Status::ExecutesCommand);
             self.position.set(0);
             self.len.set(0);
             self.clear();
-            self.status.set(Status::ExecutesCommand);
             self.schedule_deferred_callback();
             Ok(())
         } else {
