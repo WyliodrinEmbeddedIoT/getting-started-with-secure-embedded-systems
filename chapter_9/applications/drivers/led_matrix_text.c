@@ -4,7 +4,7 @@
 #include "tock.h"
 
 bool led_matrix_text_is_present (void) {
-  syscall_return_t ret = command (LED_MATRIX_TEXT_DRIVER_NUM, 0, 0, 0);
+  syscall_return_t ret = command (DRIVER_NUM_LED_MATRIX_TEXT, 0, 0, 0);
   if (ret.type == TOCK_SYSCALL_SUCCESS) {
     return true;
   } else {
@@ -13,7 +13,7 @@ bool led_matrix_text_is_present (void) {
 }
 
 bool led_matrix_text_set_speed (unsigned int speed) {
-  syscall_return_t ret = command (LED_MATRIX_TEXT_DRIVER_NUM, 1, speed, 0);
+  syscall_return_t ret = command (DRIVER_NUM_LED_MATRIX_TEXT, 1, speed, 0);
   if (ret.type == TOCK_SYSCALL_SUCCESS) {
     return true;
   } else {

@@ -4,7 +4,7 @@
 
 #include "tock.h"
 
-#define LED_MATRIX_TEXT_DRIVER_NUM 0xa0003
+#define DRIVER_NUM_LED_MATRIX_TEXT 0xa0003
 
 #ifdef __cplusplus
 extern "C" {

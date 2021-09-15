@@ -4,7 +4,7 @@
 
 #include "tock.h"
 
-#define DIGIT_LETTER_DISPLAY_DRIVER_NUM 0xa0001
+#define DRIVER_NUM_DIGIT_LETTER_DISPLAY 0xa0001
 
 #ifdef __cplusplus
 extern "C" {

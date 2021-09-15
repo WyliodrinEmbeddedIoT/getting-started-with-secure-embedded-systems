@@ -14,15 +14,15 @@ typedef struct {
 } text_display_status_t;
 
 static syscall_return_t text_display_command(uint32_t command_number, int arg1, int arg2) {
-  return command (TEXT_DISPLAY_DRIVER_NUM, command_number, arg1, arg2);
+  return command (DRIVER_NUM_TEXT_DISPLAY, command_number, arg1, arg2);
 }
 
 static allow_ro_return_t text_display_allow (uint32_t allow_number, const void* ptr, size_t size) {
-  return allow_readonly (TEXT_DISPLAY_DRIVER_NUM, allow_number, ptr, size);
+  return allow_readonly (DRIVER_NUM_TEXT_DISPLAY, allow_number, ptr, size);
 }
 
 static subscribe_return_t text_display_subscribe (uint32_t subscribe_number, subscribe_upcall upcall, void* userdata) {
-  return subscribe (TEXT_DISPLAY_DRIVER_NUM, subscribe_number, upcall, userdata);
+  return subscribe (DRIVER_NUM_TEXT_DISPLAY, subscribe_number, upcall, userdata);
 }
 
 bool text_display_is_present (void) {
@@ -46,13 +46,13 @@ static void text_displayed (int status, __attribute__ ((unused)) int unused2, __
   text_display_allow (0, NULL, 0);
   text_display_subscribe (0, NULL, NULL);
   if (done_callback != NULL) {
-    (*done_callback)(status, done_callback_args);
+    (*done_callback)(tock_status_to_returncode(status), done_callback_args);
   }
 }
 
-statuscode_t text_display_show_text (const char* text, unsigned int display_ms) {
+returncode_t text_display_show_text (const char* text, unsigned int display_ms) {
   if (text == NULL) {
-    return TOCK_STATUSCODE_INVAL;
+    return RETURNCODE_EINVAL;
   }
   // allow the buffer
   allow_ro_return_t allow_ret = text_display_allow (0, text, strlen (text));
@@ -63,7 +63,7 @@ statuscode_t text_display_show_text (const char* text, unsigned int display_ms) 
       // execute command
       syscall_return_t ret = text_display_command (1, strlen (text), display_ms);
       if (ret.type == TOCK_SYSCALL_SUCCESS) {
-        return TOCK_STATUSCODE_SUCCESS;
+        return RETURNCODE_SUCCESS;
       } else {
         // unallow the buffer
         text_display_allow (0, NULL, 0);
@@ -71,15 +71,15 @@ statuscode_t text_display_show_text (const char* text, unsigned int display_ms) 
         // unsubscribe
         text_display_subscribe (0, NULL, NULL);
 
-        return ret.data[0];
+        return tock_status_to_returncode(ret.data[0]);
       }
     } else {
       // unallow the buffer
       text_display_allow (0, NULL, 0);
-      return subscribe_ret.status;
+      return tock_status_to_returncode(subscribe_ret.status);
     }
   } else {
-    return allow_ret.status;
+    return tock_status_to_returncode(allow_ret.status);
   }
 }
 
@@ -91,17 +91,17 @@ static void text_displayed_sync (statuscode_t status, void *user_data) {
   display_status->status = status;
 }
 
-statuscode_t text_display_show_text_sync (const char* text, unsigned int display_ms) {
+returncode_t text_display_show_text_sync (const char* text, unsigned int display_ms) {
   text_display_status_t display_status;
   display_status.done   = false;
   display_status.status = 0;
 
   text_display_set_done_callback (text_displayed_sync, &display_status);
-  statuscode_t ret = text_display_show_text (text, display_ms);
+  returncode_t ret = text_display_show_text (text, display_ms);
 
-  if (ret == TOCK_STATUSCODE_SUCCESS) {
+  if (ret == RETURNCODE_SUCCESS) {
     yield_for (&display_status.done);
-    return display_status.status;
+    return tock_status_to_returncode(display_status.status);
   } else {
     return ret;
   }

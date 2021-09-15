@@ -5,6 +5,7 @@
 #include "digit_letter_display.h"
 
 int main(void) {
+  // if (driver_exists(DRIVER_NUM_DIGIT_LETTER_DISPLAY)) {
   if (digit_letter_display_is_present()) {
     printf ("Displaying digits\n");
     for (unsigned char digit='0'; digit <= '9'; digit++) {
