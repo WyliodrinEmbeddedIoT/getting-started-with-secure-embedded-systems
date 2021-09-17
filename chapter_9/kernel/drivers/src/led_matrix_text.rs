@@ -163,7 +163,6 @@ impl<'a, L: Led, A: Alarm<'a>> LedMatrixText<'a, L, A> {
         if self.position.get() >= self.len.get() {
             self.position.set(0);
         }
-        debug!("display_next {} of {}", self.position.get(), self.len.get());
         if self.position.get() < self.len.get() {
             if !self.buffer.map_or(false, |buffer| {
                 if self.position.get() < buffer.len() {
@@ -176,6 +175,8 @@ impl<'a, L: Led, A: Alarm<'a>> LedMatrixText<'a, L, A> {
             }) {
                 self.clear();
             }
+        } else {
+            self.clear();
         }
         if self.len.get() > 0 {
             self.alarm
@@ -276,16 +277,18 @@ impl<'a, L: Led, A: Alarm<'a>> TextScreen<'a> for LedMatrixText<'a, L, A> {
             if len <= buffer.len() {
                 self.status.set(Status::ExecutesPrint);
                 let previous_len = self.len.get();
-                self.buffer.map(|buf| {
-                    for position in 0..cmp::min(len, buf.len()) {
+                let printed_len = self.buffer.map_or(0, |buf| {
+                    let max_len = cmp::min(len, buf.len());
+                    for position in 0..max_len {
                         buf[position] = buffer[position];
                     }
-                    self.len.set(cmp::max(len, self.len.get()));
+                    self.len.set(cmp::max(max_len, self.len.get()));
+                    max_len
                 });
                 self.client_buffer.replace(buffer);
-                self.client_len.set(len);
+                self.client_len.set(printed_len);
                 self.schedule_deferred_callback();
-                if previous_len == 0 {
+                if previous_len == 0 && printed_len != 0 {
                     self.display_next();
                 }
                 Ok(())
