@@ -97,8 +97,8 @@ const LETTERS: [u32; 26] = [
 
 /// Structure representing the driver
 pub struct DigitLetterDisplay<'a, L: Led> {
-    // the a slice of Matrix LEDs 
-    // LED 0 is upper left, LED 24 is lower right
+    /// The a slice of Matrix LEDs 
+    /// LED 0 is upper left, LED 24 is lower right
     leds: &'a [&'a L],
 }
 
@@ -189,6 +189,7 @@ impl<'a, L: Led> SyscallDriver for DigitLetterDisplay<'a, L> {
                 Ok(()) => CommandReturn::success(),
                 Err(err) => CommandReturn::failure(err),
             },
+            // Inform the process that we do not understand the command
             _ => CommandReturn::failure(ErrorCode::NOSUPPORT),
         }
     }
