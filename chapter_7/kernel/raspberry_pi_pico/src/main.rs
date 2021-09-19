@@ -77,6 +77,7 @@ pub struct RaspberryPiPico {
     scheduler: &'static RoundRobinSched<'static>,
     systick: cortexm0p::systick::SysTick,
 
+    /// Add the `DigitLetterDisplay` driver to the board implementation structure
     digit_letter_display: &'static drivers::digit_letter_display::DigitLetterDisplay<
         'static,
         LedMatrixLed<'static, RPGpioPin<'static>, VirtualMuxAlarm<'static, RPTimer<'static>>>,
@@ -96,6 +97,7 @@ impl SyscallDriverLookup for RaspberryPiPico {
             kernel::ipc::DRIVER_NUM => f(Some(&self.ipc)),
             capsules::adc::DRIVER_NUM => f(Some(self.adc)),
             capsules::temperature::DRIVER_NUM => f(Some(self.temperature)),
+            // register the `DigitDisplayDriver` with the kernel
             drivers::digit_letter_display::DRIVER_NUM => f(Some(self.digit_letter_display)),
             _ => f(None),
         }
@@ -345,6 +347,8 @@ pub unsafe fn main() {
             // 0 => &peripherals.pins.get_pin(RPGpio::GPIO0),
             // 1 => &peripherals.pins.get_pin(RPGpio::GPIO1),
             // pins 2 to 11 are used for LED Matrix pins
+
+            // comment in the pins that are used for the LED matrix
             // 2 => &peripherals.pins.get_pin(RPGpio::GPIO2),
             // 3 => &peripherals.pins.get_pin(RPGpio::GPIO3),
             // 4 => &peripherals.pins.get_pin(RPGpio::GPIO4),
@@ -355,6 +359,7 @@ pub unsafe fn main() {
             // 9 => &peripherals.pins.get_pin(RPGpio::GPIO9),
             // 10 => &peripherals.pins.get_pin(RPGpio::GPIO10),
             // 11 => &peripherals.pins.get_pin(RPGpio::GPIO11),
+
             12 => &peripherals.pins.get_pin(RPGpio::GPIO12),
             13 => &peripherals.pins.get_pin(RPGpio::GPIO13),
             14 => &peripherals.pins.get_pin(RPGpio::GPIO14),
@@ -457,15 +462,25 @@ pub unsafe fn main() {
         RPTimer<'static>
     ));
 
+    // Initialize the DigitLetterDisplay using the static_init! macro
+    // This returns a 'static reference to the newly created DigitLetterDisplay structure
     let digit_letter_display = static_init!(
+        // The driver's concrete data type
         drivers::digit_letter_display::DigitLetterDisplay<
+            // 'a becomes 'static
             'static,
+            // L: Led becomes LedMatrixLed<...>
             LedMatrixLed<
                 'static,
                 RPGpioPin<'static>,
                 capsules::virtual_alarm::VirtualMuxAlarm<'static, RPTimer<'static>>,
             >,
         >,
+        // Calling the new function to initialize the driver
+        // This uses the led_matrix_leds macro to extract each LED from the
+        // LED matrix.
+        //   - (0, 0) is the upper left LED
+        //   - (4, 4) is the lower right LED
         drivers::digit_letter_display::DigitLetterDisplay::new(components::led_matrix_leds!(
             RPGpioPin<'static>,
             capsules::virtual_alarm::VirtualMuxAlarm<'static, RPTimer<'static>>,
@@ -523,6 +538,7 @@ pub unsafe fn main() {
         scheduler,
         systick: cortexm0p::systick::SysTick::new_with_calibration(125_000_000),
 
+        // add the DigitLetterDisplay driver to the boards implementation initialization
         digit_letter_display,
     };
 

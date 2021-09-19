@@ -114,6 +114,7 @@ pub struct MicroBit {
     scheduler: &'static RoundRobinSched<'static>,
     systick: cortexm4::systick::SysTick,
 
+    /// Add the `DigitLetterDisplay` driver to the board implementation structure
     digit_letter_display: &'static drivers::digit_letter_display::DigitLetterDisplay<
         'static,
         LedMatrixLed<
@@ -144,6 +145,7 @@ impl SyscallDriverLookup for MicroBit {
             capsules::buzzer_driver::DRIVER_NUM => f(Some(self.buzzer)),
             capsules::app_flash_driver::DRIVER_NUM => f(Some(self.app_flash)),
             capsules::sound_pressure::DRIVER_NUM => f(Some(self.sound_pressure)),
+            // register the `DigitDisplayDriver` with the kernel
             drivers::digit_letter_display::DRIVER_NUM => f(Some(self.digit_letter_display)),
             kernel::ipc::DRIVER_NUM => f(Some(&self.ipc)),
             _ => f(None),
@@ -587,15 +589,25 @@ pub unsafe fn main() {
     while !base_peripherals.clock.low_started() {}
     while !base_peripherals.clock.high_started() {}
 
+    // Initialize the DigitLetterDisplay using the static_init! macro
+    // This returns a 'static reference to the newly created DigitLetterDisplay structure
     let digit_letter_display = static_init!(
+        // The driver's concrete data type
         drivers::digit_letter_display::DigitLetterDisplay<
+            // 'a becomes 'static
             'static,
+            // L: Led becomes LedMatrixLed<...>
             LedMatrixLed<
                 'static,
                 nrf52::gpio::GPIOPin<'static>,
                 capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52::rtc::Rtc<'static>>,
             >,
         >,
+        // Calling the new function to initialize the driver
+        // This uses the led_matrix_leds macro to extract each LED from the
+        // LED matrix. 
+        //   - (0, 0) is the upper left LED
+        //   - (4, 4) is the lower right LED
         drivers::digit_letter_display::DigitLetterDisplay::new(components::led_matrix_leds!(
             nrf52::gpio::GPIOPin<'static>,
             capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52::rtc::Rtc<'static>>,
@@ -655,6 +667,7 @@ pub unsafe fn main() {
         scheduler,
         systick: cortexm4::systick::SysTick::new_with_calibration(64000000),
 
+        // add the DigitLetterDisplay driver to the boards implementation initialization
         digit_letter_display,
     };
 

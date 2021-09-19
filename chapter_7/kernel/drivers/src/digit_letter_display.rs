@@ -1,10 +1,18 @@
 use kernel::hil::led::Led;
+use kernel::process::{Error, ProcessId};
 use kernel::syscall::{CommandReturn, SyscallDriver};
 use kernel::ErrorCode;
-use kernel::process::{Error, ProcessId};
 
+/// The driver number 
+///
+/// As this is not one of Tock's standard drivers,
+/// its number has to be higher or equal to 0xa0000.
 pub const DRIVER_NUM: usize = 0xa0001;
 
+/// Font glyph definition for digits
+///
+/// A font glyph is a set of bits that represents that
+/// state of the LEDs
 const DIGITS: [u32; 10] = [
     // 0
     0b11111_10011_10101_11001_11111,
@@ -28,6 +36,10 @@ const DIGITS: [u32; 10] = [
     0b11111_10001_11111_00001_11111,
 ];
 
+/// Font glyph definition for capital letters
+///
+/// A font glyph is a set of bits that represents that
+/// state of the LEDs
 const LETTERS: [u32; 26] = [
     // A
     0b01110_10001_11111_10001_10001,
@@ -83,11 +95,15 @@ const LETTERS: [u32; 26] = [
     0b11111_00010_00100_01000_11111,
 ];
 
+/// Structure representing the driver
 pub struct DigitLetterDisplay<'a, L: Led> {
+    // the a slice of Matrix LEDs 
+    // LED 0 is upper left, LED 24 is lower right
     leds: &'a [&'a L],
 }
 
 impl<'a, L: Led> DigitLetterDisplay<'a, L> {
+    /// Initializes a new driver structure 
     pub fn new(leds: &'a [&'a L]) -> Self {
         if leds.len() != 25 {
             panic!("Expecting 25 LEDs, {} supplied", leds.len());
@@ -95,6 +111,11 @@ impl<'a, L: Led> DigitLetterDisplay<'a, L> {
         DigitLetterDisplay { leds: leds }
     }
 
+    /// Prints the a font `glyph` by setting LEDs
+    /// on and off depending on the glyph's bits
+    ///
+    /// A font glyph is a set of bits that represents that
+    /// state of the LEDs
     fn print(&self, glyph: u32) {
         for index in 0..25 {
             match (glyph >> (24 - index)) & 0x01 {
@@ -104,23 +125,33 @@ impl<'a, L: Led> DigitLetterDisplay<'a, L> {
         }
     }
 
+    /// Clears the displayed glyph by turning off
+    /// all the LEDs
     fn clear(&self) {
         for index in 0..25 {
             self.leds[index].off();
         }
     }
 
+    /// Displays a character
     fn display(&self, character: char) -> Result<(), ErrorCode> {
+        // As the font has only capital letters, we make sure
+        // that we only ask it to display uppercase letters
         let displayed_character = character.to_ascii_uppercase();
         match displayed_character {
+            // display a number
             '0'..='9' => {
                 self.print(DIGITS[displayed_character as usize - '0' as usize]);
                 Ok(())
             }
+            // display a letter
             'A'..='Z' => {
                 self.print(LETTERS[displayed_character as usize - 'A' as usize]);
                 Ok(())
             }
+            // we don't know how to display this character,
+            // so we display an *empty* character and
+            // return an error
             _ => {
                 self.clear();
                 Err(ErrorCode::INVAL)
@@ -129,9 +160,11 @@ impl<'a, L: Led> DigitLetterDisplay<'a, L> {
     }
 }
 
+/// The implementation of `SyscallDriver` makes `DigitLetterDisplay` a syscall driver
 impl<'a, L: Led> SyscallDriver for DigitLetterDisplay<'a, L> {
-
-    fn allocate_grant (&self, _process_id: ProcessId) -> Result<(), Error> {
+    fn allocate_grant(&self, _process_id: ProcessId) -> Result<(), Error> {
+        // there is no grant used by this driver, we just ignore 
+        // the function call and return success
         Ok(())
     }
 
@@ -143,7 +176,15 @@ impl<'a, L: Led> SyscallDriver for DigitLetterDisplay<'a, L> {
         _process_id: ProcessId,
     ) -> CommandReturn {
         match command_number {
+            // Tock's convention states that all syscall drivers must return *success* or *success_...* for
+            // command number 0. This allows processes to verify if a driver is present.
             0 => CommandReturn::success(),
+            // Display the character received in *r2*
+            // We cannot directly convert a *usize* to *char* as not all numbers are valid
+            // UTF8 code points. As our driver only displays digits and letters from the ASCII
+            // code, we can safely converet the *usize* to an *u8* as all ASCII characters fit
+            // into a one byte (*u8*). As all ASCII characters are valid UTF-8 code points, 
+            // Rust allows us to safely converty an *u8* to a *char*.
             1 => match self.display(r2 as u8 as char) {
                 Ok(()) => CommandReturn::success(),
                 Err(err) => CommandReturn::failure(err),
@@ -151,4 +192,6 @@ impl<'a, L: Led> SyscallDriver for DigitLetterDisplay<'a, L> {
             _ => CommandReturn::failure(ErrorCode::NOSUPPORT),
         }
     }
+
+    /* the default implementation of the *allow_...* functions is used */
 }
