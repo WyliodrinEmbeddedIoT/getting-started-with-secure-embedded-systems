@@ -18,7 +18,7 @@ include $(TOCK_USERLAND_BASE_DIR)/AppMakefile.mk
 
 # Build the drivers
 ../drivers/build/cortex-m0/drivers.a:
-	$(MAKE) -f ../drivers/Makefile
+	make -f ../drivers/Makefile
 
 # Clean drivers folder
 clean::

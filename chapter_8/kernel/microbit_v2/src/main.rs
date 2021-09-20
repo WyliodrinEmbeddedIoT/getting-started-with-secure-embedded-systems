@@ -114,15 +114,14 @@ pub struct MicroBit {
     scheduler: &'static RoundRobinSched<'static>,
     systick: cortexm4::systick::SysTick,
 
-    /// Add the `TextDisplay` driver to the board implementation structure.
-    text_display: &'static drivers::text_display::TextDisplay<
+    /// Add the `DigitLetterDisplay` driver to the board implementation structure.
+    digit_letter_display: &'static drivers::digit_letter_display::DigitLetterDisplay<
         'static,
         LedMatrixLed<
             'static,
             nrf52::gpio::GPIOPin<'static>,
             capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52::rtc::Rtc<'static>>,
         >,
-        capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52833::rtc::Rtc<'static>>,
     >,
 }
 
@@ -146,8 +145,8 @@ impl SyscallDriverLookup for MicroBit {
             capsules::buzzer_driver::DRIVER_NUM => f(Some(self.buzzer)),
             capsules::app_flash_driver::DRIVER_NUM => f(Some(self.app_flash)),
             capsules::sound_pressure::DRIVER_NUM => f(Some(self.sound_pressure)),
-            // Register the `TextDisplay` driver with the kernel.
-            drivers::text_display::DRIVER_NUM => f(Some(self.text_display)),
+            // Register the `DigitLetterDisplay` driver with the kernel.
+            drivers::digit_letter_display::DRIVER_NUM => f(Some(self.digit_letter_display)),
             kernel::ipc::DRIVER_NUM => f(Some(&self.ipc)),
             _ => f(None),
         }
@@ -590,17 +589,11 @@ pub unsafe fn main() {
     while !base_peripherals.clock.low_started() {}
     while !base_peripherals.clock.high_started() {}
 
-    // Initialize a virtual alarm for the TextDisplay driver
-    let virtual_alarm_text_display = static_init!(
-        capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52833::rtc::Rtc>,
-        capsules::virtual_alarm::VirtualMuxAlarm::new(mux_alarm)
-    );
-
-    // Initialize the TextDisplay using the static_init! macro
-    // This returns a 'static reference to the newly created TextDisplay structure
-    let text_display = static_init!(
+    // Initialize the DigitLetterDisplay using the static_init! macro
+    // This returns a 'static reference to the newly created DigitLetterDisplay structure
+    let digit_letter_display = static_init!(
         // The driver's concrete data type
-        drivers::text_display::TextDisplay<
+        drivers::digit_letter_display::DigitLetterDisplay<
             // 'a becomes 'static
             'static,
             // L: Led becomes LedMatrixLed<...>
@@ -609,57 +602,43 @@ pub unsafe fn main() {
                 nrf52::gpio::GPIOPin<'static>,
                 capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52::rtc::Rtc<'static>>,
             >,
-            // A: Alarm becomes VirtualMuxAlarm<...>
-            capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52::rtc::Rtc<'static>>,
         >,
         // Calling the new function to initialize the driver
         // This uses the led_matrix_leds macro to extract each LED from the
         // LED matrix. 
         //   - (0, 0) is the upper left LED
         //   - (4, 4) is the lower right LED
-        drivers::text_display::TextDisplay::new(
-            components::led_matrix_leds!(
-                nrf52::gpio::GPIOPin<'static>,
-                capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52::rtc::Rtc<'static>>,
-                led,
-                (0, 0),
-                (1, 0),
-                (2, 0),
-                (3, 0),
-                (4, 0),
-                (0, 1),
-                (1, 1),
-                (2, 1),
-                (3, 1),
-                (4, 1),
-                (0, 2),
-                (1, 2),
-                (2, 2),
-                (3, 2),
-                (4, 2),
-                (0, 3),
-                (1, 3),
-                (2, 3),
-                (3, 3),
-                (4, 3),
-                (0, 4),
-                (1, 4),
-                (2, 4),
-                (3, 4),
-                (4, 4)
-            ),
-            virtual_alarm_text_display,
-            // Ask the kernel to create a new grant for the driver id *drivers::text_display::DRIVER_NUM*.
-            board_kernel.create_grant(
-                drivers::text_display::DRIVER_NUM,
-                &memory_allocation_capability
-            )
-        ),
+        drivers::digit_letter_display::DigitLetterDisplay::new(components::led_matrix_leds!(
+            nrf52::gpio::GPIOPin<'static>,
+            capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52::rtc::Rtc<'static>>,
+            led,
+            (0, 0),
+            (1, 0),
+            (2, 0),
+            (3, 0),
+            (4, 0),
+            (0, 1),
+            (1, 1),
+            (2, 1),
+            (3, 1),
+            (4, 1),
+            (0, 2),
+            (1, 2),
+            (2, 2),
+            (3, 2),
+            (4, 2),
+            (0, 3),
+            (1, 3),
+            (2, 3),
+            (3, 3),
+            (4, 3),
+            (0, 4),
+            (1, 4),
+            (2, 4),
+            (3, 4),
+            (4, 4)
+        ))
     );
-
-    // Set the driver as the alarm's client. Upon expiration,
-    // the alarm calls the driver's *alarm* function.
-    virtual_alarm_text_display.set_alarm_client(text_display);
 
     let scheduler = components::sched::round_robin::RoundRobinComponent::new(&PROCESSES)
         .finalize(components::rr_component_helper!(NUM_PROCS));
@@ -688,8 +667,8 @@ pub unsafe fn main() {
         scheduler,
         systick: cortexm4::systick::SysTick::new_with_calibration(64000000),
 
-        // Add the TextDisplay driver to the boards implementation initialization.
-        text_display,
+        // Add the DigitLetterDisplay driver to the boards implementation initialization.
+        digit_letter_display,
     };
 
     let chip = static_init!(

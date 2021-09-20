@@ -114,14 +114,17 @@ pub struct MicroBit {
     scheduler: &'static RoundRobinSched<'static>,
     systick: cortexm4::systick::SysTick,
 
-    /// Add the `DigitLetterDisplay` driver to the board implementation structure.
-    digit_letter_display: &'static drivers::digit_letter_display::DigitLetterDisplay<
+    /// Add Tock's `TextScreen` driver to the board implementation structure.
+    text_screen: &'static capsules::text_screen::TextScreen<'static>,
+    /// Add the `LedMatrixText` driver to the board implementation structure.
+    led_matrix_text: &'static drivers::led_matrix_text::LedMatrixText<
         'static,
         LedMatrixLed<
             'static,
             nrf52::gpio::GPIOPin<'static>,
             capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52::rtc::Rtc<'static>>,
         >,
+        capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52833::rtc::Rtc<'static>>,
     >,
 }
 
@@ -145,8 +148,10 @@ impl SyscallDriverLookup for MicroBit {
             capsules::buzzer_driver::DRIVER_NUM => f(Some(self.buzzer)),
             capsules::app_flash_driver::DRIVER_NUM => f(Some(self.app_flash)),
             capsules::sound_pressure::DRIVER_NUM => f(Some(self.sound_pressure)),
-            // Register the `DigitLetterDisplay` driver with the kernel.
-            drivers::digit_letter_display::DRIVER_NUM => f(Some(self.digit_letter_display)),
+            // Register Tock's `TextScreen` driver with the kernel.
+            capsules::text_screen::DRIVER_NUM => f(Some(self.text_screen)),
+            // Register the `LedMatrixText` driver with the kernel.
+            drivers::led_matrix_text::DRIVER_NUM => f(Some(self.led_matrix_text)),
             kernel::ipc::DRIVER_NUM => f(Some(&self.ipc)),
             _ => f(None),
         }
@@ -287,7 +292,7 @@ pub unsafe fn main() {
     //--------------------------------------------------------------------------
 
     let dynamic_deferred_call_clients =
-        static_init!([DynamicDeferredCallClientState; 3], Default::default());
+        static_init!([DynamicDeferredCallClientState; 4], Default::default());
     let dynamic_deferred_caller = static_init!(
         DynamicDeferredCall,
         DynamicDeferredCall::new(dynamic_deferred_call_clients)
@@ -589,11 +594,19 @@ pub unsafe fn main() {
     while !base_peripherals.clock.low_started() {}
     while !base_peripherals.clock.high_started() {}
 
-    // Initialize the DigitLetterDisplay using the static_init! macro
-    // This returns a 'static reference to the newly created DigitLetterDisplay structure
-    let digit_letter_display = static_init!(
-        // The driver's concrete data type
-        drivers::digit_letter_display::DigitLetterDisplay<
+    // Initialize a virtual alarm for the LedMatrixText driver
+    let virtual_alarm_led_matrix_text = static_init!(
+        capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52833::rtc::Rtc>,
+        capsules::virtual_alarm::VirtualMuxAlarm::new(mux_alarm)
+    );
+
+    // Initialize a 'static buffer of 50 for the LedMatrixText driver
+    let led_matrix_buffer = static_init!([u8; 50], [0; 50]);
+
+    // Initialize the LedMatrixText using the static_init! macro
+    // This returns a 'static reference to the newly created LedMatrixText structure
+    let led_matrix_text = static_init!(
+        drivers::led_matrix_text::LedMatrixText<
             // 'a becomes 'static
             'static,
             // L: Led becomes LedMatrixLed<...>
@@ -602,43 +615,76 @@ pub unsafe fn main() {
                 nrf52::gpio::GPIOPin<'static>,
                 capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52::rtc::Rtc<'static>>,
             >,
+            // A: Alarm becomes VirtualMuxAlarm<...>
+            capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52::rtc::Rtc<'static>>,
         >,
         // Calling the new function to initialize the driver
         // This uses the led_matrix_leds macro to extract each LED from the
         // LED matrix. 
         //   - (0, 0) is the upper left LED
         //   - (4, 4) is the lower right LED
-        drivers::digit_letter_display::DigitLetterDisplay::new(components::led_matrix_leds!(
-            nrf52::gpio::GPIOPin<'static>,
-            capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52::rtc::Rtc<'static>>,
-            led,
-            (0, 0),
-            (1, 0),
-            (2, 0),
-            (3, 0),
-            (4, 0),
-            (0, 1),
-            (1, 1),
-            (2, 1),
-            (3, 1),
-            (4, 1),
-            (0, 2),
-            (1, 2),
-            (2, 2),
-            (3, 2),
-            (4, 2),
-            (0, 3),
-            (1, 3),
-            (2, 3),
-            (3, 3),
-            (4, 3),
-            (0, 4),
-            (1, 4),
-            (2, 4),
-            (3, 4),
-            (4, 4)
-        ))
+        drivers::led_matrix_text::LedMatrixText::new(
+            components::led_matrix_leds!(
+                nrf52::gpio::GPIOPin<'static>,
+                capsules::virtual_alarm::VirtualMuxAlarm<'static, nrf52::rtc::Rtc<'static>>,
+                led,
+                (0, 0),
+                (1, 0),
+                (2, 0),
+                (3, 0),
+                (4, 0),
+                (0, 1),
+                (1, 1),
+                (2, 1),
+                (3, 1),
+                (4, 1),
+                (0, 2),
+                (1, 2),
+                (2, 2),
+                (3, 2),
+                (4, 2),
+                (0, 3),
+                (1, 3),
+                (2, 3),
+                (3, 3),
+                (4, 3),
+                (0, 4),
+                (1, 4),
+                (2, 4),
+                (3, 4),
+                (4, 4)
+            ),
+            virtual_alarm_led_matrix_text,
+            // Send the allocated buffer to the driver
+            led_matrix_buffer,
+            // Set the default speed in ms
+            300,
+            // Set the kernel's deferred caller
+            dynamic_deferred_caller
+        ),
     );
+
+    // Set the driver as the alarm's client. Upon expiration,
+    // the alarm calls the driver's *alarm* function.
+    virtual_alarm_led_matrix_text.set_alarm_client(led_matrix_text);
+
+    // Set the handle for the deferred callback.
+    led_matrix_text.initialize_callback_handle(
+        // Register the driver's deferred callback handler with the kernel
+        // to receive a handle for it.
+        dynamic_deferred_caller
+            .register(led_matrix_text)
+            .expect("no deferred call slot available for led matrix text"),
+    );
+
+    // Initialize a new TextScreen driver...
+    let text_screen = components::text_screen::TextScreenComponent::new(
+        board_kernel,
+        capsules::text_screen::DRIVER_NUM,
+        led_matrix_text,
+    )
+    // ... with a buffer of length 50.
+    .finalize(components::screen_buffer_size!(50));
 
     let scheduler = components::sched::round_robin::RoundRobinComponent::new(&PROCESSES)
         .finalize(components::rr_component_helper!(NUM_PROCS));
@@ -667,8 +713,10 @@ pub unsafe fn main() {
         scheduler,
         systick: cortexm4::systick::SysTick::new_with_calibration(64000000),
 
-        // Add the DigitLetterDisplay driver to the boards implementation initialization.
-        digit_letter_display,
+        // Add the TextScreen driver to the boards implementation initialization.
+        text_screen,
+        // Add the LedMatrixText driver to the boards implementation initialization.
+        led_matrix_text,
     };
 
     let chip = static_init!(
