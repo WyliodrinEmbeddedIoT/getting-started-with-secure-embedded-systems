@@ -78,6 +78,7 @@ pub struct RaspberryPiPico {
     scheduler: &'static RoundRobinSched<'static>,
     systick: cortexm0p::systick::SysTick,
 
+    /// Add the `TextDisplay` driver to the board implementation structure.
     text_display: &'static drivers::text_display::TextDisplay<
         'static,
         LedMatrixLed<'static, RPGpioPin<'static>, VirtualMuxAlarm<'static, RPTimer<'static>>>,
@@ -97,6 +98,7 @@ impl SyscallDriverLookup for RaspberryPiPico {
             capsules::led::DRIVER_NUM => f(Some(self.led)),
             kernel::ipc::DRIVER_NUM => f(Some(&self.ipc)),
             capsules::adc::DRIVER_NUM => f(Some(self.adc)),
+            // Register the `TextDisplay` driver with the kernel.
             capsules::temperature::DRIVER_NUM => f(Some(self.temperature)),
             drivers::text_display::DRIVER_NUM => f(Some(self.text_display)),
             _ => f(None),
@@ -347,6 +349,8 @@ pub unsafe fn main() {
             // 0 => &peripherals.pins.get_pin(RPGpio::GPIO0),
             // 1 => &peripherals.pins.get_pin(RPGpio::GPIO1),
             // pins 2 to 11 are used for LED Matrix pins
+
+            // Comment in the pins that are used for the LED matrix.
             // 2 => &peripherals.pins.get_pin(RPGpio::GPIO2),
             // 3 => &peripherals.pins.get_pin(RPGpio::GPIO3),
             // 4 => &peripherals.pins.get_pin(RPGpio::GPIO4),
@@ -357,6 +361,7 @@ pub unsafe fn main() {
             // 9 => &peripherals.pins.get_pin(RPGpio::GPIO9),
             // 10 => &peripherals.pins.get_pin(RPGpio::GPIO10),
             // 11 => &peripherals.pins.get_pin(RPGpio::GPIO11),
+
             12 => &peripherals.pins.get_pin(RPGpio::GPIO12),
             13 => &peripherals.pins.get_pin(RPGpio::GPIO13),
             14 => &peripherals.pins.get_pin(RPGpio::GPIO14),
@@ -459,19 +464,26 @@ pub unsafe fn main() {
         RPTimer<'static>
     ));
 
+    // Initialize a virtual alarm for the TextDisplay driver
     let virtual_alarm_text_display = static_init!(
         capsules::virtual_alarm::VirtualMuxAlarm<'static, RPTimer<'static>>,
         capsules::virtual_alarm::VirtualMuxAlarm::new(mux_alarm)
     );
 
+    // Initialize the TextDisplay using the static_init! macro
+    // This returns a 'static reference to the newly created TextDisplay structure
     let text_display = static_init!(
+        // The driver's concrete data type
         drivers::text_display::TextDisplay<
+            // 'a becomes 'static
             'static,
+            // L: Led becomes LedMatrixLed<...>
             LedMatrixLed<
                 'static,
                 RPGpioPin<'static>,
                 capsules::virtual_alarm::VirtualMuxAlarm<'static, RPTimer<'static>>,
             >,
+            // A: Alarm becomes VirtualMuxAlarm<...>
             capsules::virtual_alarm::VirtualMuxAlarm<'static, RPTimer<'static>>,
         >,
         drivers::text_display::TextDisplay::new(
@@ -506,6 +518,7 @@ pub unsafe fn main() {
                 (4, 4)
             ),
             virtual_alarm_text_display,
+            // Ask the kernel to create a new grant for the driver id *drivers::text_display::DRIVER_NUM*.
             board_kernel.create_grant(
                 drivers::text_display::DRIVER_NUM,
                 &memory_allocation_capability
@@ -513,6 +526,8 @@ pub unsafe fn main() {
         )
     );
 
+    // Set the driver as the alarm's client. Upon expiration,
+    // the alarm calls the driver's *alarm* function.
     virtual_alarm_text_display.set_alarm_client(text_display);
 
     // PROCESS CONSOLE
@@ -540,6 +555,7 @@ pub unsafe fn main() {
         scheduler,
         systick: cortexm0p::systick::SysTick::new_with_calibration(125_000_000),
 
+        // Add the TextDisplay driver to the boards implementation initialization.
         text_display,
     };
 

@@ -63,7 +63,7 @@ static mut PROCESSES: [Option<&'static dyn kernel::process::Process>; NUM_PROCS]
     [None; NUM_PROCS];
 
 static mut CHIP: Option<&'static Rp2040<Rp2040DefaultPeripherals>> = None;
-
+/* ... */
 /// Supported drivers by the platform
 pub struct RaspberryPiPico {
     ipc: kernel::ipc::IPC<NUM_PROCS, NUM_UPCALLS_IPC>,
@@ -78,7 +78,9 @@ pub struct RaspberryPiPico {
     scheduler: &'static RoundRobinSched<'static>,
     systick: cortexm0p::systick::SysTick,
 
+    /// Add Tock's `TextScreen` driver to the board implementation structure.
     text_screen: &'static capsules::text_screen::TextScreen<'static>,
+    /// Add the `LedMatrixText` driver to the board implementation structure.
     led_matrix_text: &'static drivers::led_matrix_text::LedMatrixText<
         'static,
         LedMatrixLed<
@@ -103,7 +105,9 @@ impl SyscallDriverLookup for RaspberryPiPico {
             kernel::ipc::DRIVER_NUM => f(Some(&self.ipc)),
             capsules::adc::DRIVER_NUM => f(Some(self.adc)),
             capsules::temperature::DRIVER_NUM => f(Some(self.temperature)),
+            // Register Tock's `TextScreen` driver with the kernel.
             capsules::text_screen::DRIVER_NUM => f(Some(self.text_screen)),
+            // Register the `LedMatrixText` driver with the kernel.
             drivers::led_matrix_text::DRIVER_NUM => f(Some(self.led_matrix_text)),
             _ => f(None),
         }
@@ -353,6 +357,8 @@ pub unsafe fn main() {
             // 0 => &peripherals.pins.get_pin(RPGpio::GPIO0),
             // 1 => &peripherals.pins.get_pin(RPGpio::GPIO1),
             // pins 2 to 11 are used for LED Matrix pins
+
+            // Comment in the pins that are used for the LED matrix.
             // 2 => &peripherals.pins.get_pin(RPGpio::GPIO2),
             // 3 => &peripherals.pins.get_pin(RPGpio::GPIO3),
             // 4 => &peripherals.pins.get_pin(RPGpio::GPIO4),
@@ -363,6 +369,7 @@ pub unsafe fn main() {
             // 9 => &peripherals.pins.get_pin(RPGpio::GPIO9),
             // 10 => &peripherals.pins.get_pin(RPGpio::GPIO10),
             // 11 => &peripherals.pins.get_pin(RPGpio::GPIO11),
+
             12 => &peripherals.pins.get_pin(RPGpio::GPIO12),
             13 => &peripherals.pins.get_pin(RPGpio::GPIO13),
             14 => &peripherals.pins.get_pin(RPGpio::GPIO14),
@@ -465,23 +472,35 @@ pub unsafe fn main() {
         RPTimer<'static>
     ));
 
+    // Initialize a virtual alarm for the LedMatrixText driver
     let virtual_alarm_led_matrix_text = static_init!(
         capsules::virtual_alarm::VirtualMuxAlarm<'static, RPTimer<'static>>,
         capsules::virtual_alarm::VirtualMuxAlarm::new(mux_alarm)
     );
 
+    // Initialize a 'static buffer of 50 for the LedMatrixText driver
     let led_matrix_buffer = static_init!([u8; 50], [0; 50]);
 
+    // Initialize the LedMatrixText using the static_init! macro
+    // This returns a 'static reference to the newly created LedMatrixText structure
     let led_matrix_text = static_init!(
         drivers::led_matrix_text::LedMatrixText<
+            // 'a becomes 'static
             'static,
+            // L: Led becomes LedMatrixLed<...>
             LedMatrixLed<
                 'static,
                 RPGpioPin<'static>,
                 capsules::virtual_alarm::VirtualMuxAlarm<'static, RPTimer<'static>>,
             >,
+            // A: Alarm becomes VirtualMuxAlarm<...>
             capsules::virtual_alarm::VirtualMuxAlarm<'static, RPTimer<'static>>,
         >,
+        // Calling the new function to initialize the driver
+        // This uses the led_matrix_leds macro to extract each LED from the
+        // LED matrix. 
+        //   - (0, 0) is the upper left LED
+        //   - (4, 4) is the lower right LED
         drivers::led_matrix_text::LedMatrixText::new(
             components::led_matrix_leds!(
                 RPGpioPin<'static>,
@@ -514,24 +533,35 @@ pub unsafe fn main() {
                 (4, 4)
             ),
             virtual_alarm_led_matrix_text,
+            // Send the allocated buffer to the driver
             led_matrix_buffer,
+            // Set the default speed in ms
             300,
+            // Set the kernel's deferred caller
             dynamic_deferred_caller
         )
     );
 
+    // Set the driver as the alarm's client. Upon expiration,
+    // the alarm calls the driver's *alarm* function.
     virtual_alarm_led_matrix_text.set_alarm_client(led_matrix_text);
+
+    // Set the handle for the deferred callback.
     led_matrix_text.initialize_callback_handle(
+        // Register the driver's deferred callback handler with the kernel
+        // to receive a handle for it.
         dynamic_deferred_caller
             .register(led_matrix_text)
             .expect("no deferred call slot available for led matrix text"),
     );
 
+    // Initialize a new TextScreen driver...
     let text_screen = components::text_screen::TextScreenComponent::new(
         board_kernel,
         capsules::text_screen::DRIVER_NUM,
         led_matrix_text,
     )
+    // ... with a buffer of length 50.
     .finalize(components::screen_buffer_size!(50));
 
     // PROCESS CONSOLE
@@ -559,7 +589,9 @@ pub unsafe fn main() {
         scheduler,
         systick: cortexm0p::systick::SysTick::new_with_calibration(125_000_000),
 
+        // Add the TextScreen driver to the boards implementation initialization.
         text_screen,
+        // Add the LedMatrixText driver to the boards implementation initialization.
         led_matrix_text,
     };
 

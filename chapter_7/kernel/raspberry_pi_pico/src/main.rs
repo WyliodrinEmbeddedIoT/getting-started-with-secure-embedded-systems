@@ -77,7 +77,7 @@ pub struct RaspberryPiPico {
     scheduler: &'static RoundRobinSched<'static>,
     systick: cortexm0p::systick::SysTick,
 
-    /// Add the `DigitLetterDisplay` driver to the board implementation structure
+    /// Add the `DigitLetterDisplay` driver to the board implementation structure.
     digit_letter_display: &'static drivers::digit_letter_display::DigitLetterDisplay<
         'static,
         LedMatrixLed<'static, RPGpioPin<'static>, VirtualMuxAlarm<'static, RPTimer<'static>>>,
@@ -97,7 +97,7 @@ impl SyscallDriverLookup for RaspberryPiPico {
             kernel::ipc::DRIVER_NUM => f(Some(&self.ipc)),
             capsules::adc::DRIVER_NUM => f(Some(self.adc)),
             capsules::temperature::DRIVER_NUM => f(Some(self.temperature)),
-            // register the `DigitDisplayDriver` with the kernel
+            // Register the `DigitLetterDisplay` driver with the kernel.
             drivers::digit_letter_display::DRIVER_NUM => f(Some(self.digit_letter_display)),
             _ => f(None),
         }
@@ -348,7 +348,7 @@ pub unsafe fn main() {
             // 1 => &peripherals.pins.get_pin(RPGpio::GPIO1),
             // pins 2 to 11 are used for LED Matrix pins
 
-            // comment in the pins that are used for the LED matrix
+            // Comment in the pins that are used for the LED matrix.
             // 2 => &peripherals.pins.get_pin(RPGpio::GPIO2),
             // 3 => &peripherals.pins.get_pin(RPGpio::GPIO3),
             // 4 => &peripherals.pins.get_pin(RPGpio::GPIO4),

@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-// Verifies if the  driver is present
+// Verifies if the driver is present
 bool digit_letter_display_is_present (void);
 
 // Displays a letter or a digit
