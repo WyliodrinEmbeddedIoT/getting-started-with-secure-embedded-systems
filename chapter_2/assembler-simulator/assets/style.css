@@ -1,0 +1,67 @@
+.source-code {
+    font-family: source-code-pro, Courier New;
+}
+
+.output, .output-bg {
+    background-color: #DFDFDF;
+}
+
+.output {
+    width: 1em;
+    margin-right: 1px;
+    margin-bottom: 1px;
+    text-align: center;
+}
+
+.instr-bg {
+    background-color: #E6F3FF;
+}
+
+.instr-bg a {
+    color: inherit;
+    cursor: pointer;
+}
+
+.stack-bg {
+    background-color: #F8DCB4;
+}
+
+.memory-block {
+    width: 1.8em;
+    display: inline-block;
+    text-align: center;
+}
+
+.marker {
+    width: 1.8em;
+    color: #FFF;
+    border-radius: 2px;
+}
+
+.marker-ip {
+    background-color: #428BCA;
+}
+
+.marker-sp {
+    background-color: #EEA236;
+}
+
+.marker-a {
+    background-color: #4D8C20;
+}
+
+.marker-b {
+	background-color: #22D19D;
+}
+
+.marker-c {
+	background-color: #A137ED;
+}
+
+.marker-d {
+	background-color: #E81F1F;
+}
+
+.codelabel-line a {
+    cursor: pointer;
+}
