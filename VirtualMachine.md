@@ -4,7 +4,7 @@ The fastets way to get started is to use an Ubuntu Virtual Machine.
 
 ## Download
 
-We have already set up a Virtual Machine that you can [download](https://wyliodrin.com) and that has installed all the necessary tools
+We have already set up a Virtual Machine that you can [download](https://tock-book.s3.us-west-1.amazonaws.com/VM/TockDev.ova) and that has installed all the necessary tools
 to get yoy started.
 
 ## Requirements
