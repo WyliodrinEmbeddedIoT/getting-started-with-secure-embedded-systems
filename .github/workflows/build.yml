@@ -1,0 +1,16 @@
+name: Build
+on: [push]
+jobs:
+  Chapter-7:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+      - name: Installing ARM gcc eabi
+        run: sudo apt install gcc-arm-none-eabi
+      - name: Building kernel for micro:bit v2 
+        run: cd chapter_8/kernel/microbit_v2 && make
+      - name: Building kernel for Raspberry Pi Pico 
+        run: cd chapter_8/kernel/raspberry_pi_pico && make
+      - name: Building applications
+        run: cd chapter_8/applications/example_app && make
