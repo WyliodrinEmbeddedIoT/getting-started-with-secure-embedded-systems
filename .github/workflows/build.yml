@@ -5,6 +5,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: true
       - uses: actions-rs/toolchain@v1
       - name: Installing ARM gcc eabi
         run: sudo apt install gcc-arm-none-eabi
