@@ -4,6 +4,8 @@
 #include "timer.h"
 #include "digit_letter_display.h"
 
+const char *DISPLAY_TEXT = "MicroBit";
+
 int main(void) {
   // verify if the driver is present
   // if (driver_exists(DRIVER_NUM_DIGIT_LETTER_DISPLAY)) {
@@ -28,8 +30,14 @@ int main(void) {
       // wait for 500 ms
       delay_ms (500);
     }
+
+    // display text
+    for (unsigned int index = 0; index < strlen (DISPLAY_TEXT); index++) {
+      digit_letter_display_show_character (DISPLAY_TEXT[index]);
+      delay_ms (500);
+    }
   } else {
-    printf ("Error: the digit_letter_display driver is not present\n");
+    printf ("Error: the DigitLetterDisplay Syscall Capsule is not present\n");
   }
   return 0;
 }

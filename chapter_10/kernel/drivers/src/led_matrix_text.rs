@@ -11,11 +11,11 @@ use kernel::syscall::{CommandReturn, SyscallDriver};
 use kernel::utilities::cells::{OptionalCell, TakeCell};
 use kernel::ErrorCode;
 
-/// The driver number 
+/// The driver number
 ///
 /// As this is not one of Tock's standard drivers,
 /// its number has to be higher or equal to 0xa0000.
-/// 
+///
 /// Our previous driver was 0xa0002 so we use the
 /// number available.
 pub const DRIVER_NUM: usize = 0xa0003;
@@ -119,14 +119,14 @@ enum Status {
 
 /// Structure representing the driver
 pub struct LedMatrixText<'a, L: Led, A: Alarm<'a>> {
-    /// the a slice of Matrix LEDs 
+    /// the a slice of Matrix LEDs
     /// LED 0 is upper left, LED 24 is lower right
     leds: &'a [&'a L],
 
     /// The alarm used to implement the asynchronous deplay
     alarm: &'a A,
 
-    /// An optional client (usually the caller) that the driver 
+    /// An optional client (usually the caller) that the driver
     /// will notify when a request is done.
     client: OptionalCell<&'a dyn TextScreenClient>,
 
@@ -161,7 +161,7 @@ pub struct LedMatrixText<'a, L: Led, A: Alarm<'a>> {
     ///   - disabled means that it does not display that text
     is_enabled: Cell<bool>,
 
-    /// A reference to the kernel's deferred caller used to schedule 
+    /// A reference to the kernel's deferred caller used to schedule
     /// deferred callbacks (software interrupts)
     deferred_caller: &'a DynamicDeferredCall,
 
@@ -171,7 +171,7 @@ pub struct LedMatrixText<'a, L: Led, A: Alarm<'a>> {
 }
 
 impl<'a, L: Led, A: Alarm<'a>> LedMatrixText<'a, L, A> {
-    /// Initializes a new driver structure 
+    /// Initializes a new driver structure
     pub fn new(
         leds: &'a [&'a L],
         alarm: &'a A,
@@ -248,9 +248,9 @@ impl<'a, L: Led, A: Alarm<'a>> LedMatrixText<'a, L, A> {
         }
         // If the length the text is greater then 0, set the next alarm.
         // If we have no letters or digits to display, the text's length
-        // is 0, it is pointless to schedule an alarm as next 
+        // is 0, it is pointless to schedule an alarm as next
         // time the alarm fires there will still be no text to display.
-        // Not setting the alarm allows the MCU to enter low power 
+        // Not setting the alarm allows the MCU to enter low power
         // modes (if there are no other taks pending).
         if self.len.get() > 0 {
             self.alarm
@@ -284,7 +284,6 @@ impl<'a, L: Led, A: Alarm<'a>> LedMatrixText<'a, L, A> {
     fn display(&self, character: char) -> Result<(), ErrorCode> {
         if self.is_enabled.get() {
             let displayed_character = character.to_ascii_uppercase();
-            debug!("display {}", displayed_character);
             match displayed_character {
                 '0'..='9' => {
                     self.print(DIGITS[displayed_character as usize - '0' as usize]);
@@ -334,7 +333,7 @@ impl<'a, L: Led, A: Alarm<'a>> DynamicDeferredCallClient for LedMatrixText<'a, L
                 self.client.map(|client| client.command_complete(Ok(())));
             }
             // The driver has performed a *print* command, inform the client
-            // that the action is done and return the buffer and the 
+            // that the action is done and return the buffer and the
             // written text length.
             Status::ExecutesPrint => {
                 self.client.map(|client| {
@@ -388,7 +387,7 @@ impl<'a, L: Led, A: Alarm<'a>> TextScreen<'a> for LedMatrixText<'a, L, A> {
                     }
                     // Compute the new length of the text sored in the driver's buffer
                     self.len.set(cmp::max(max_len, self.len.get()));
-                    // Make printed_length = max_len, the number of characters that 
+                    // Make printed_length = max_len, the number of characters that
                     // we have copied to thed driver's buffer.
                     max_len
                 });
@@ -512,7 +511,7 @@ impl<'a, L: Led, A: Alarm<'a>> TextScreen<'a> for LedMatrixText<'a, L, A> {
 /// This implementation allows `LedMatrixText` to expose a setup syscall API
 impl<'a, L: Led, A: Alarm<'a>> SyscallDriver for LedMatrixText<'a, L, A> {
     fn allocate_grant(&self, _: ProcessId) -> Result<(), Error> {
-        // there is no grant used by this driver, we just ignore 
+        // there is no grant used by this driver, we just ignore
         // the function call and return success
         Ok(())
     }

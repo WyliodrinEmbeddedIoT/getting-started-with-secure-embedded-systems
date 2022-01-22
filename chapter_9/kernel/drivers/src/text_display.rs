@@ -9,11 +9,11 @@ use kernel::syscall::{CommandReturn, SyscallDriver};
 use kernel::utilities::cells::OptionalCell;
 use kernel::ErrorCode;
 
-/// The driver number 
+/// The driver number
 ///
 /// As this is not one of Tock's standard drivers,
 /// its number has to be higher or equal to 0xa0000.
-/// 
+///
 /// Our previous driver was 0xa0001 so we use the
 /// number available.
 pub const DRIVER_NUM: usize = 0xa0002;
@@ -126,9 +126,9 @@ pub struct AppData {
 
 /// Structure representing the driver
 pub struct TextDisplay<'a, L: Led, A: Alarm<'a>> {
-    /// the a slice of Matrix LEDs 
+    /// the array of Matrix LEDs
     /// LED 0 is upper left, LED 24 is lower right
-    leds: &'a [&'a L],
+    leds: &'a [&'a L; 25],
 
     /// The alarm used to implement the asynchronous deplay
     alarm: &'a A,
@@ -148,15 +148,12 @@ pub struct TextDisplay<'a, L: Led, A: Alarm<'a>> {
 }
 
 impl<'a, L: Led, A: Alarm<'a>> TextDisplay<'a, L, A> {
-    /// Initializes a new driver structure 
-    pub fn new(leds: &'a [&'a L], alarm: &'a A, grant: Grant<AppData, 1>) -> Self {
-        if leds.len() != 25 {
-            panic!("Expecting 25 LEDs, {} supplied", leds.len());
-        }
+    /// Initializes a new driver structure
+    pub fn new(leds: &'a [&'a L; 25], alarm: &'a A, grant: Grant<AppData, 1>) -> Self {
         TextDisplay {
-            leds: leds,
-            alarm: alarm,
-            grant: grant,
+            leds,
+            alarm,
+            grant,
             in_progress: Cell::new(false),
             process_id: OptionalCell::empty(),
         }
@@ -164,16 +161,16 @@ impl<'a, L: Led, A: Alarm<'a>> TextDisplay<'a, L, A> {
 
     /// Displays the next letter or digit from the process' buffer
     fn display_next(&self) {
-        // Verify if there is a display in progress. 
+        // Verify if there is a display in progress.
         // If not, calling this function was an error,
-        /// so just ignore it.
+        // so just ignore it.
         if self.in_progress.get() {
             // Verify if the process that has requested the display is
             // still valid.
             self.process_id.map_or_else(
                 || {
                     // The process is not valid anymore, it has been stopped or restarted,
-                    // the grant are where the driver stores all the data about the current 
+                    // the grant are where the driver stores all the data about the current
                     // display is not valid anymore. We consider that the display
                     // cannot continue and mark that we are free to take another
                     // display request.
@@ -209,11 +206,11 @@ impl<'a, L: Led, A: Alarm<'a>> TextDisplay<'a, L, A> {
                                 // so we increase the current position
                                 app.position = app.position + 1;
                             } else {
-                                // There was an error when we tried to display 
+                                // There was an error when we tried to display
                                 // a letter or a digit, we we cannot continue
                                 // the current action.
                                 self.in_progress.set(false);
-                                // Inform the process that the display has failed, 
+                                // Inform the process that the display has failed,
                                 // due to a buffer access error.
                                 let _ = upcalls.schedule_upcall(0, (ErrorCode::NOMEM.into(), 0, 0));
                             }
@@ -229,7 +226,7 @@ impl<'a, L: Led, A: Alarm<'a>> TextDisplay<'a, L, A> {
                         // We entered the grant are and displayed the next letter or digit.
                         Ok(()) => {}
                         // We where not abler to enter the grant are, so we consider that we
-                        // cannot continue the current display action and are ready to 
+                        // cannot continue the current display action and are ready to
                         // take a new one.
                         // We cannot infom the process about the failure as the process
                         // that has requested the action is not valid anymore.

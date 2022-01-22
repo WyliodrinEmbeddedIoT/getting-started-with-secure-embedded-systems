@@ -620,7 +620,7 @@ pub unsafe fn main() {
         >,
         // Calling the new function to initialize the driver
         // This uses the led_matrix_leds macro to extract each LED from the
-        // LED matrix. 
+        // LED matrix.
         //   - (0, 0) is the upper left LED
         //   - (4, 4) is the lower right LED
         drivers::led_matrix_text::LedMatrixText::new(

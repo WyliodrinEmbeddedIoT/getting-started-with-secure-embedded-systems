@@ -3,7 +3,7 @@ use kernel::process::{Error, ProcessId};
 use kernel::syscall::{CommandReturn, SyscallDriver};
 use kernel::ErrorCode;
 
-/// The driver number 
+/// The driver number
 ///
 /// As this is not one of Tock's standard drivers,
 /// its number has to be higher or equal to 0xa0000.
@@ -97,18 +97,15 @@ const LETTERS: [u32; 26] = [
 
 /// Structure representing the driver
 pub struct DigitLetterDisplay<'a, L: Led> {
-    /// The a slice of Matrix LEDs 
+    /// The a slice of Matrix LEDs
     /// LED 0 is upper left, LED 24 is lower right
-    leds: &'a [&'a L],
+    leds: &'a [&'a L; 25],
 }
 
 impl<'a, L: Led> DigitLetterDisplay<'a, L> {
-    /// Initializes a new driver structure 
-    pub fn new(leds: &'a [&'a L]) -> Self {
-        if leds.len() != 25 {
-            panic!("Expecting 25 LEDs, {} supplied", leds.len());
-        }
-        DigitLetterDisplay { leds: leds }
+    /// Initializes a new driver structure
+    pub fn new(leds: &'a [&'a L; 25]) -> Self {
+        DigitLetterDisplay { leds }
     }
 
     /// Prints the a font `glyph` by setting LEDs
@@ -163,7 +160,7 @@ impl<'a, L: Led> DigitLetterDisplay<'a, L> {
 /// The implementation of `SyscallDriver` makes `DigitLetterDisplay` a syscall driver
 impl<'a, L: Led> SyscallDriver for DigitLetterDisplay<'a, L> {
     fn allocate_grant(&self, _process_id: ProcessId) -> Result<(), Error> {
-        // there is no grant used by this driver, we just ignore 
+        // there is no grant used by this driver, we just ignore
         // the function call and return success
         Ok(())
     }
@@ -183,7 +180,7 @@ impl<'a, L: Led> SyscallDriver for DigitLetterDisplay<'a, L> {
             // We cannot directly convert a *usize* to *char* as not all numbers are valid
             // UTF8 code points. As our driver only displays digits and letters from the ASCII
             // code, we can safely converet the *usize* to an *u8* as all ASCII characters fit
-            // into a one byte (*u8*). As all ASCII characters are valid UTF-8 code points, 
+            // into a one byte (*u8*). As all ASCII characters are valid UTF-8 code points,
             // Rust allows us to safely converty an *u8* to a *char*.
             1 => match self.display(r2 as u8 as char) {
                 Ok(()) => CommandReturn::success(),

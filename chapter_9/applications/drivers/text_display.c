@@ -130,7 +130,7 @@ returncode_t text_display_show_text (const char* text, unsigned int display_ms) 
 // The user data that the function receives is a pointer to a boo value
 // that the synchronous *text_display_show_text_sync* function verifies
 // when yield returns.
-static void text_displayed_sync (statuscode_t status, void *user_data) {
+static void text_displayed_sync (returncode_t status, void *user_data) {
   text_display_status_t *display_status = (text_display_status_t*)user_data;
   // set the bool value to true
   display_status->done   = true;
