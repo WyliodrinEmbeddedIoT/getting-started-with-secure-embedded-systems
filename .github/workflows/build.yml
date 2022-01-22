@@ -1,0 +1,71 @@
+name: Build
+on: [push]
+jobs:
+  Chapter-8:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: actions-rs/toolchain@v1
+        with: 
+          override: false
+      - name: Installing ARM gcc eabi
+        run: sudo apt install gcc-arm-none-eabi
+      - name: Building kernel for micro:bit v2 
+        run: cd chapter_8/kernel/microbit_v2 && make
+      - name: Building kernel for Raspberry Pi Pico 
+        run: cd chapter_8/kernel/raspberry_pi_pico && make
+      - name: Building applications
+        run: cd chapter_8/applications/example_app && make
+  Chapter-9:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: actions-rs/toolchain@v1
+        with: 
+          override: false
+      - name: Installing ARM gcc eabi
+        run: sudo apt install gcc-arm-none-eabi
+      - name: Building kernel for micro:bit v2 
+        run: cd chapter_9/kernel/microbit_v2 && make
+      - name: Building kernel for Raspberry Pi Pico 
+        run: cd chapter_9/kernel/raspberry_pi_pico && make
+      - name: Building applications
+        run: cd chapter_9/applications/example_app && make
+  Chapter-10:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: actions-rs/toolchain@v1
+        with: 
+          override: false
+      - name: Installing ARM gcc eabi
+        run: sudo apt install gcc-arm-none-eabi
+      - name: Building kernel for micro:bit v2 
+        run: cd chapter_10/kernel/microbit_v2 && make
+      - name: Building kernel for Raspberry Pi Pico 
+        run: cd chapter_10/kernel/raspberry_pi_pico && make
+      - name: Building applications
+        run: cd chapter_10/applications/example_app && make
+  Chapter-12:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: actions-rs/toolchain@v1
+        with: 
+          override: false
+      - name: Installing ARM gcc eabi
+        run: sudo apt install gcc-arm-none-eabi
+      - name: Building kernel for micro:bit v2 
+        run: cd chapter_12/kernel/microbit_v2 && make
+      - name: Building kernel for Raspberry Pi Pico 
+        run: cd chapter_12/kernel/raspberry_pi_pico && make
+      - name: Building applications
+        run: cd chapter_12/applications/example_app && make
